@@ -124,11 +124,13 @@
                 <i class="fa-solid fa-arrow-pointer"></i>
             </button>
             <button class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-white drop-shadow-md" data-tool="direct" title="Direct Selection Tool (A) - Edit nodes and handles">
-                <!-- Simulation of "White Arrow" using CSS styling -->
                 <i class="fa-solid fa-arrow-pointer" style="transform: scaleX(-1); -webkit-text-stroke: 1px #9ca3af;"></i>
             </button>
             <button class="tool-btn active w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-300" data-tool="pen" title="Pen Tool (P) - Draw Bézier curves">
                 <i class="fa-solid fa-pen-nib"></i>
+            </button>
+            <button class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-300" data-tool="convert" title="Convert Anchor Tool (Shift+C) - Toggle smooth/corner nodes">
+                <i class="fa-solid fa-angle-up text-lg"></i>
             </button>
             <button class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-300" data-tool="text" title="Text Tool (T)">
                 <i class="fa-solid fa-t"></i>
@@ -159,10 +161,16 @@
             
             <div>
                 <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-700 pb-2">Appearance</h2>
-                <div id="no-selection-msg" class="text-sm text-gray-500 italic">No path selected.</div>
+                <div id="no-selection-msg" class="text-sm text-gray-500 italic">No object selected.</div>
                 
                 <div id="properties-panel" class="hidden flex-col gap-5">
                     
+                    <!-- Text Content (Only visible for text) -->
+                    <div id="text-prop-group" class="hidden flex-col gap-2">
+                        <label class="text-sm text-gray-300">Text Content</label>
+                        <input type="text" id="prop-text" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-blue-500 outline-none" placeholder="Type here...">
+                    </div>
+
                     <!-- Colors -->
                     <div class="flex items-center justify-between">
                         <label class="text-sm text-gray-300">Fill</label>
@@ -214,12 +222,24 @@
             
             <div class="mt-auto">
                 <div class="bg-gray-900 p-3 rounded-lg border border-gray-700 text-xs text-gray-400 space-y-2">
-                    <p><strong class="text-gray-300">Pen Tool:</strong> Click to add sharp nodes. Drag to create bezier curves. Click start node to close path.</p>
-                    <p><strong class="text-gray-300">Direct Selection:</strong> Select shapes. Drag nodes to move them. Drag handles to adjust curves.</p>
+                    <p><strong class="text-gray-300">Pen (P):</strong> Click for corners, drag for curves. Hold <kbd class="bg-gray-700 px-1 rounded">Alt</kbd> to edit nodes (Convert Anchor).</p>
+                    <p><strong class="text-gray-300">Convert (Shift+C):</strong> Click node to make straight, drag node to make curved.</p>
                 </div>
             </div>
 
         </aside>
+    </div>
+
+    <!-- Custom Dialog Modal (Replaces confirm/alert) -->
+    <div id="modal-overlay" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-gray-800 border border-gray-700 p-6 rounded-lg shadow-2xl max-w-sm w-full transform transition-all">
+            <h3 id="modal-title" class="text-lg font-bold text-white mb-2">Clear Canvas?</h3>
+            <p id="modal-desc" class="text-gray-400 text-sm mb-6">This action cannot be undone. Are you sure you want to remove all vectors?</p>
+            <div class="flex justify-end gap-3">
+                <button id="modal-btn-cancel" class="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition">Cancel</button>
+                <button id="modal-btn-confirm" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded transition shadow-lg">Clear All</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -255,27 +275,28 @@
                 strokeWidth: 2,
                 visible: false
             });
-            hoverIndicator.locked = true; // Prevent interaction with the indicator
+            hoverIndicator.locked = true;
 
-            // Tools definition
+            // Global State Variables
             let activeTool = 'pen';
             let currentDrawingPath = null;
-            let hoverState = null; // 'close', 'resume', or null
+            let hoverState = null; 
             let resumePath = null;
             
-            // --- TOOL EXECUTIONS ---
-            
-            // 1. PEN TOOL (Bézier Drawing)
+            // 1. PEN TOOL (Bézier Drawing + Alt-Modifier Convert)
             let penTool = new Tool();
+            let penConvertHitSegment = null;
+            let penIsConvertDrag = false;
             
             penTool.onMouseMove = function(event) {
                 hoverState = null;
                 hoverIndicator.visible = false;
                 resumePath = null;
-                paper.view.element.style.cursor = 'crosshair';
+                paper.view.element.style.cursor = event.modifiers.alt ? 'pointer' : 'crosshair';
                 
+                if (event.modifiers.alt) return; // Don't show path closing guides while holding alt
+
                 if (currentDrawingPath && currentDrawingPath.segments.length > 1) {
-                    // Check if hovering near the start point to CLOSE path
                     let firstSegment = currentDrawingPath.firstSegment;
                     if (event.point.getDistance(firstSegment.point) < 10) {
                         hoverState = 'close';
@@ -284,28 +305,32 @@
                         paper.view.element.style.cursor = 'pointer';
                     }
                 } else if (!currentDrawingPath) {
-                    // Check if hovering near an open path's endpoints to RESUME drawing
                     let hit = project.hitTest(event.point, { ends: true, tolerance: 10 });
                     if (hit && hit.item && hit.item.layer.name !== 'background' && !hit.item.closed) {
                         hoverState = 'resume';
                         hoverIndicator.position = hit.segment.point;
                         hoverIndicator.visible = true;
                         resumePath = hit.item;
-                        
-                        // If we hit the first segment, reverse the path so we append correctly to the end
-                        if (hit.segment === hit.item.firstSegment) {
-                            hit.item.reverse();
-                        }
+                        if (hit.segment === hit.item.firstSegment) hit.item.reverse();
                         paper.view.element.style.cursor = 'copy';
                     }
                 }
             };
 
             penTool.onMouseDown = function(event) {
+                // ALT-KEY MODIFIER: Temporarily act as Convert Anchor Tool
+                if (event.modifiers.alt || event.modifiers.option) {
+                    let hitResult = project.hitTest(event.point, { segments: true, tolerance: 8 });
+                    if (hitResult && hitResult.item.layer.name !== 'background') {
+                        penConvertHitSegment = hitResult.segment;
+                        penIsConvertDrag = false;
+                    }
+                    return; // Bypass normal pen logic
+                }
+
                 if (hoverState === 'close' && currentDrawingPath) {
-                    // Close the path
                     currentDrawingPath.closed = true;
-                    currentDrawingPath.fillColor = currentFillColor; // Apply fill only when closed
+                    currentDrawingPath.fillColor = currentFillColor;
                     currentDrawingPath.selected = false;
                     currentDrawingPath = null;
                     hoverIndicator.visible = false;
@@ -314,47 +339,94 @@
                 }
                 
                 if (hoverState === 'resume' && resumePath) {
-                    // Resume an open path
                     project.deselectAll();
                     currentDrawingPath = resumePath;
                     currentDrawingPath.selected = true;
                     hoverIndicator.visible = false;
-                    return; // Prevent adding an extra segment exactly on the click
+                    return; 
                 }
 
                 if (!currentDrawingPath) {
-                    // Start new path
                     project.deselectAll();
                     currentDrawingPath = new Path();
                     currentDrawingPath.strokeColor = currentStrokeColor !== 'none' ? currentStrokeColor : '#000000';
                     currentDrawingPath.strokeWidth = currentStrokeWidth;
-                    currentDrawingPath.selected = true; // Shows nodes
+                    currentDrawingPath.selected = true;
                 }
                 
-                // Add the new straight point
                 currentDrawingPath.add(event.point);
             };
             
             penTool.onMouseDrag = function(event) {
-                if (currentDrawingPath) {
-                    // Symmetrical handle adjustment: Click and drag to create bezier handles (Illustrator style)
+                // ALT-KEY MODIFIER: Drag to create symmetric curves
+                if (penConvertHitSegment) {
+                    penIsConvertDrag = true;
+                    penConvertHitSegment.handleOut = event.point.subtract(penConvertHitSegment.point);
+                    penConvertHitSegment.handleIn = penConvertHitSegment.handleOut.multiply(-1);
+                    return;
+                }
+
+                // Normal pen logic: Create smooth curve handles while drawing
+                if (currentDrawingPath && !event.modifiers.alt) {
                     let lastSegment = currentDrawingPath.lastSegment;
-                    // The handleOut goes in the direction of the drag
                     lastSegment.handleOut = event.point.subtract(lastSegment.point);
-                    // The handleIn goes in the opposite direction
                     lastSegment.handleIn = lastSegment.handleOut.multiply(-1);
                 }
             };
 
-            // 2. SELECTION TOOL (Black Arrow - Object Selection)
+            penTool.onMouseUp = function(event) {
+                // ALT-KEY MODIFIER: Click to clear handles (straighten)
+                if (penConvertHitSegment) {
+                    if (!penIsConvertDrag) {
+                        penConvertHitSegment.clearHandles();
+                    }
+                    penConvertHitSegment = null;
+                }
+            };
+
+            // 2. CONVERT ANCHOR TOOL (Dedicated tool to toggle smooth/corner)
+            let convertTool = new Tool();
+            let cvHitSegment = null;
+            let cvIsDrag = false;
+
+            convertTool.onMouseMove = function(event) {
+                paper.view.element.style.cursor = 'crosshair';
+            }
+
+            convertTool.onMouseDown = function(event) {
+                cvHitSegment = null;
+                cvIsDrag = false;
+                
+                let hitResult = project.hitTest(event.point, { segments: true, tolerance: 8 });
+                if (hitResult && hitResult.item.layer.name !== 'background') {
+                    cvHitSegment = hitResult.segment;
+                }
+            };
+
+            convertTool.onMouseDrag = function(event) {
+                if (cvHitSegment) {
+                    cvIsDrag = true;
+                    // Symmetrical handles based on drag distance/direction
+                    cvHitSegment.handleOut = event.point.subtract(cvHitSegment.point);
+                    cvHitSegment.handleIn = cvHitSegment.handleOut.multiply(-1);
+                }
+            };
+
+            convertTool.onMouseUp = function(event) {
+                if (cvHitSegment && !cvIsDrag) {
+                    // Click without drag clears handles (converts to sharp corner)
+                    cvHitSegment.clearHandles();
+                }
+                cvHitSegment = null;
+            };
+
+            // 3. SELECTION TOOL (Black Arrow - Object Selection)
             let selectTool = new Tool();
             let hitPath = null;
             
             selectTool.onMouseDown = function(event) {
                 hitPath = null;
-                
-                // Hit test just for fills and strokes (ignoring nodes)
-                let hitResult = project.hitTest(event.point, { fill: true, stroke: true, tolerance: 5 });
+                let hitResult = project.hitTest(event.point, { fill: true, stroke: true, tolerance: 5, bounds: true });
                 
                 if (!hitResult) {
                     project.deselectAll();
@@ -364,39 +436,26 @@
 
                 if (hitResult.item && hitResult.item.layer.name !== 'background') {
                     hitPath = hitResult.item;
-                    
-                    if (!event.modifiers.shift) {
-                        project.deselectAll();
-                    }
+                    if (!event.modifiers.shift) project.deselectAll();
                     hitPath.selected = true;
-                    // Remove individual segment selections so handles don't show
-                    hitPath.segments.forEach(seg => seg.selected = false); 
-                    
+                    // Disable segment selection so handles don't show
+                    if (hitPath.segments) hitPath.segments.forEach(seg => seg.selected = false); 
                     updateUISelection();
                 }
             };
 
             selectTool.onMouseDrag = function(event) {
-                if (hitPath) {
-                    // Move entire path
-                    hitPath.position = hitPath.position.add(event.delta);
-                }
+                if (hitPath) hitPath.position = hitPath.position.add(event.delta);
             };
 
-            // 3. DIRECT SELECTION TOOL (White Arrow - Node & Handle Editing)
+            // 4. DIRECT SELECTION TOOL (White Arrow - Node & Handle Editing)
             let directSelectTool = new Tool();
             let dsHitSegment = null, dsHitPath = null, dsHitHandle = null;
 
             directSelectTool.onMouseDown = function(event) {
                 dsHitSegment = dsHitPath = dsHitHandle = null;
-                
-                // Hit test allowing segments (nodes) and handles
                 let hitResult = project.hitTest(event.point, {
-                    segments: true,
-                    handles: true,
-                    stroke: true,
-                    fill: true,
-                    tolerance: 8
+                    segments: true, handles: true, stroke: true, fill: true, tolerance: 8
                 });
                 
                 if (!hitResult) {
@@ -409,20 +468,17 @@
                     dsHitPath = hitResult.item;
                     
                     if (hitResult.type === 'fill' || hitResult.type === 'stroke') {
-                        // Clicked the line, reveal nodes
                         project.deselectAll();
                         dsHitPath.selected = true;
                     } 
                     else {
-                        // Clicked a specific node or handle
                         if (!dsHitPath.selected) {
                             project.deselectAll();
                             dsHitPath.selected = true;
                         }
                         
                         if (hitResult.type === 'segment') {
-                            // By selecting the specific segment, Paper.js natively reveals its Bézier handles!
-                            dsHitPath.segments.forEach(seg => seg.selected = false);
+                            if (dsHitPath.segments) dsHitPath.segments.forEach(seg => seg.selected = false);
                             hitResult.segment.selected = true;
                             dsHitSegment = hitResult.segment;
                         } else if (hitResult.type === 'handle-in') {
@@ -439,36 +495,33 @@
 
             directSelectTool.onMouseDrag = function(event) {
                 if (dsHitSegment && dsHitHandle) {
-                    // Stretching / Adjusting a bezier handle
                     dsHitSegment[dsHitHandle] = dsHitSegment[dsHitHandle].add(event.delta);
                 } else if (dsHitSegment) {
-                    // Moving a specific vertex/node
                     dsHitSegment.point = dsHitSegment.point.add(event.delta);
                 }
             };
 
-            // 4. TEXT TOOL
+            // 5. TEXT TOOL
             let textTool = new Tool();
             textTool.onMouseDown = function(event) {
-                let textContent = prompt("Enter text:", "Vector Text");
-                if (textContent) {
-                    project.deselectAll();
-                    let text = new PointText(event.point);
-                    text.content = textContent;
-                    text.fillColor = currentFillColor || '#000000'; // Text needs color
-                    text.strokeColor = currentStrokeColor !== 'none' ? currentStrokeColor : null;
-                    text.strokeWidth = currentStrokeWidth;
-                    text.fontSize = 32;
-                    text.fontFamily = 'Inter';
-                    text.selected = true;
-                    updateUISelection();
-                    
-                    // Switch back to select tool automatically
-                    document.querySelector('[data-tool="select"]').click();
-                }
+                project.deselectAll();
+                let text = new PointText(event.point);
+                text.content = "New Text";
+                text.fillColor = currentFillColor || '#000000'; 
+                text.strokeColor = currentStrokeColor !== 'none' ? currentStrokeColor : null;
+                text.strokeWidth = currentStrokeWidth;
+                text.fontSize = 32;
+                text.fontFamily = 'Inter';
+                text.selected = true;
+                updateUISelection();
+                
+                // Auto switch to select tool
+                document.querySelector('[data-tool="select"]').click();
+                
+                // Focus the text input
+                setTimeout(() => document.getElementById('prop-text').focus(), 50);
             };
 
-            
             // Tool Switching Logic
             const toolBtns = document.querySelectorAll('.tool-btn');
             toolBtns.forEach(btn => {
@@ -477,21 +530,19 @@
                     btn.classList.add('active');
                     activeTool = btn.dataset.tool;
                     
-                    // Cleanup visual aids when switching tools
                     hoverIndicator.visible = false;
                     paper.view.element.style.cursor = 'default';
                     
-                    // Cancel any current drawing path if switching away from pen
                     if(activeTool !== 'pen' && currentDrawingPath) {
                         if(currentDrawingPath.segments.length < 2) currentDrawingPath.remove();
                         currentDrawingPath.selected = false;
                         currentDrawingPath = null;
                     }
                     
-                    // Activate corresponding Paper.js tool
                     if(activeTool === 'pen') penTool.activate();
                     else if(activeTool === 'select') selectTool.activate();
                     else if(activeTool === 'direct') directSelectTool.activate();
+                    else if(activeTool === 'convert') convertTool.activate();
                     else if(activeTool === 'text') textTool.activate();
                 });
             });
@@ -510,19 +561,19 @@
             const strokeWidthVal = document.getElementById('stroke-width-val');
             const propOpacity = document.getElementById('prop-opacity');
             const opacityVal = document.getElementById('opacity-val');
+            const textPropGroup = document.getElementById('text-prop-group');
+            const propText = document.getElementById('prop-text');
 
             function rgbToHex(r, g, b) {
                 return "#" + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1);
             }
 
-            // Map paper.js colors to hex for input
             function getHexColor(paperColor) {
                 if(!paperColor) return null;
                 return rgbToHex(Math.round(paperColor.red*255), Math.round(paperColor.green*255), Math.round(paperColor.blue*255));
             }
 
             function updateUISelection() {
-                // Get selected items (excluding background layer items)
                 let selectedItems = project.selectedItems.filter(item => item.layer.name !== 'background');
                 
                 if (selectedItems.length > 0) {
@@ -531,7 +582,16 @@
                     panel.classList.add('flex');
                     noSelMsg.classList.add('hidden');
 
-                    // Fill Color
+                    // Check if Text
+                    if (item instanceof PointText) {
+                        textPropGroup.classList.remove('hidden');
+                        textPropGroup.classList.add('flex');
+                        propText.value = item.content;
+                    } else {
+                        textPropGroup.classList.add('hidden');
+                        textPropGroup.classList.remove('flex');
+                    }
+
                     if (item.fillColor) {
                         let hex = getHexColor(item.fillColor);
                         propFill.value = hex;
@@ -541,7 +601,6 @@
                         fillHex.textContent = 'NONE';
                     }
 
-                    // Stroke Color
                     if (item.strokeColor) {
                         let hex = getHexColor(item.strokeColor);
                         propStroke.value = hex;
@@ -551,12 +610,10 @@
                         strokeHex.textContent = 'NONE';
                     }
 
-                    // Stroke Width
                     let w = item.strokeWidth || 0;
                     propStrokeWidth.value = w;
                     strokeWidthVal.textContent = w + ' px';
 
-                    // Opacity
                     let o = item.opacity !== undefined ? item.opacity : 1;
                     propOpacity.value = o;
                     opacityVal.textContent = Math.round(o * 100) + '%';
@@ -567,14 +624,17 @@
                 }
             }
 
-            // Apply Properties to Selected Items
             function applyProperty(property, value) {
-                let selectedItems = project.selectedItems;
-                selectedItems.forEach(item => {
-                    item[property] = value;
-                });
+                let selectedItems = project.selectedItems.filter(i => i.layer.name !== 'background');
+                selectedItems.forEach(item => item[property] = value);
                 paper.view.draw();
             }
+
+            propText.addEventListener('input', (e) => {
+                let selectedItems = project.selectedItems.filter(i => i instanceof PointText);
+                selectedItems.forEach(item => item.content = e.target.value);
+                paper.view.draw();
+            });
 
             propFill.addEventListener('input', (e) => {
                 let val = e.target.value;
@@ -603,7 +663,6 @@
                 applyProperty('opacity', val);
             });
 
-            // Transparent Buttons
             document.getElementById('btn-no-fill').addEventListener('click', () => {
                 currentFillColor = null;
                 fillHex.textContent = 'NONE';
@@ -615,7 +674,6 @@
                 applyProperty('strokeColor', null);
             });
 
-            // Layering
             document.getElementById('btn-bring-front').addEventListener('click', () => {
                 project.selectedItems.forEach(item => item.bringToFront());
             });
@@ -623,41 +681,50 @@
             document.getElementById('btn-send-back').addEventListener('click', () => {
                 project.selectedItems.forEach(item => {
                     item.sendToBack();
-                    // Must bring above background layer!
                     bgRect.sendToBack(); 
                 });
             });
 
-            // Deletion
             function deleteSelection() {
-                project.selectedItems.forEach(item => item.remove());
+                project.selectedItems.forEach(item => {
+                    if (item.layer.name !== 'background') item.remove();
+                });
                 updateUISelection();
                 if(currentDrawingPath && currentDrawingPath.removed) currentDrawingPath = null;
             }
             document.getElementById('btn-delete').addEventListener('click', deleteSelection);
 
-            // Clear All
+            // Custom Confirm Modal Logic
+            const modalOverlay = document.getElementById('modal-overlay');
+            const modalCancel = document.getElementById('modal-btn-cancel');
+            const modalConfirm = document.getElementById('modal-btn-confirm');
+            
             document.getElementById('btn-clear').addEventListener('click', () => {
-                if(confirm('Clear the entire vector canvas?')) {
-                    mainLayer.removeChildren();
-                    updateUISelection();
-                    paper.view.draw();
-                }
+                modalOverlay.classList.remove('hidden');
+            });
+            
+            modalCancel.addEventListener('click', () => {
+                modalOverlay.classList.add('hidden');
+            });
+            
+            modalConfirm.addEventListener('click', () => {
+                mainLayer.removeChildren();
+                updateUISelection();
+                paper.view.draw();
+                modalOverlay.classList.add('hidden');
             });
 
             // Keyboard Shortcuts
             window.addEventListener('keydown', (e) => {
-                if (e.target.tagName.toLowerCase() === 'input') return;
+                if (e.target.tagName.toLowerCase() === 'input') return; // Ignore if typing
                 
-                if (e.key === 'Delete' || e.key === 'Backspace') {
-                    deleteSelection();
-                }
+                if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
                 if (e.key.toLowerCase() === 'v') document.querySelector('[data-tool="select"]').click();
                 if (e.key.toLowerCase() === 'a') document.querySelector('[data-tool="direct"]').click();
                 if (e.key.toLowerCase() === 'p') document.querySelector('[data-tool="pen"]').click();
+                if (e.key.toLowerCase() === 'c' && e.shiftKey) document.querySelector('[data-tool="convert"]').click();
                 if (e.key.toLowerCase() === 't') document.querySelector('[data-tool="text"]').click();
             });
-
             
             // Resize Canvas
             document.getElementById('btn-resize').addEventListener('click', () => {
@@ -667,26 +734,22 @@
                     paper.view.viewSize = new Size(w, h);
                     bgRect.bounds = new Rectangle(0, 0, w, h);
                     
-                    // Adjust DOM canvas container to match
                     document.getElementById('canvas-wrapper').style.width = w + 'px';
                     document.getElementById('canvas-wrapper').style.height = h + 'px';
                     
                     paper.view.draw();
                 }
             });
-            // Initial trigger to set DOM wrapper size
             document.getElementById('btn-resize').click(); 
 
             // Export Functions
             window.exportArt = function(format) {
-                // Deselect everything first so handles/bounding boxes don't render in export
                 project.deselectAll();
-                hoverIndicator.visible = false; // Hide pen indicator
+                hoverIndicator.visible = false;
                 updateUISelection();
                 paper.view.draw();
 
                 if (format === 'svg') {
-                    // Export SVG string
                     let svgData = project.exportSVG({ asString: true });
                     const blob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
                     const url = URL.createObjectURL(blob);
@@ -695,18 +758,9 @@
                     link.download = 'vector-art.svg';
                     link.click();
                     URL.revokeObjectURL(url);
-                } else if (format === 'png' || format === 'jpg') {
-                    // For PNG/JPG, pull directly from HTML5 canvas data url
+                } else {
                     const canvas = document.getElementById('c');
-                    let dataURL;
-                    if (format === 'jpg') {
-                        dataURL = canvas.toDataURL('image/jpeg', 1.0); // background is already white
-                    } else {
-                        // For transparent PNG, we'd normally hide background. 
-                        // Since requested white background on workspace, we leave bgRect visible.
-                        // If true transparency desired in PNG, set bgRect.visible = false before export.
-                        dataURL = canvas.toDataURL('image/png');
-                    }
+                    let dataURL = format === 'jpg' ? canvas.toDataURL('image/jpeg', 1.0) : canvas.toDataURL('image/png');
                     
                     let link = document.createElement('a');
                     link.href = dataURL;
