@@ -1,63 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web Vector Editor (Paper.js)</title>
+
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Paper.js for robust vector graphics math and rendering -->
+
+    <!-- Paper.js for vector math and rendering -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js"></script>
+
+    <!-- ImageTracer.js for Auto-Vectorization -->
+    <script src="https://cdn.jsdelivr.net/npm/imagetracerjs@1.2.6/imagetracer_v1.2.6.min.js"></script>
+
     <style>
         body {
             margin: 0;
             overflow: hidden;
             font-family: 'Inter', sans-serif;
-            background-color: #111827; /* Tailwind gray-900 */
+            background-color: #111827;
         }
-        
-        /* Custom scrollbar */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #1f2937; }
-        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
-        
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+
         #workspace {
-            background-color: #9ca3af; /* Darker gray workspace */
-            /* Illustrator-like workspace grid */
-            background-image: 
+            background-color: #1f2937;
+            /* Gris oscuro */
+            background-image:
                 linear-gradient(#6b7280 1px, transparent 1px),
                 linear-gradient(90deg, #6b7280 1px, transparent 1px);
             background-size: 20px 20px;
             background-position: center center;
-            overflow: auto;
+            overflow: hidden;
+            /* Paper.js manejará el paneo */
             display: flex;
+            flex: 1;
             justify-content: center;
             align-items: center;
         }
 
         .canvas-container {
-            margin: 40px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            background-color: white; /* Actual canvas area */
-            position: relative;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            box-shadow: none;
         }
 
         canvas {
+            width: 100%;
+            height: 100%;
             display: block;
         }
 
-        /* Tool buttons */
         .tool-btn {
             transition: all 0.15s ease;
         }
+
         .tool-btn.active {
             background-color: #3b82f6;
             color: white;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
         }
 
-        /* Custom color inputs */
         input[type="color"] {
             -webkit-appearance: none;
             border: none;
@@ -68,13 +92,21 @@
             padding: 0;
             background: transparent;
         }
-        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-        input[type="color"]::-webkit-color-swatch { border: 1px solid #4b5563; border-radius: 4px; }
-        
+
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+
+        input[type="color"]::-webkit-color-swatch {
+            border: 1px solid #4b5563;
+            border-radius: 4px;
+        }
+
         .transparent-btn {
-            width: 28px; height: 28px;
+            width: 28px;
+            height: 28px;
             background: linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc),
-                        linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc);
+                linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc);
             background-size: 10px 10px;
             background-position: 0 0, 5px 5px;
             border: 1px solid #4b5563;
@@ -82,34 +114,57 @@
         }
     </style>
 </head>
+
 <body class="text-gray-200 flex flex-col h-screen">
 
-    <!-- Top Navbar -->
-    <header class="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 shrink-0 z-10 shadow-md">
+    <header
+        class="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 shrink-0 z-10 shadow-md">
         <div class="flex items-center gap-3">
             <i class="fa-solid fa-bezier-curve text-blue-400 text-xl"></i>
-            <h1 class="font-bold text-lg tracking-wide">VectorEditor <span class="text-xs font-normal text-gray-400">Pro</span></h1>
+            <h1 class="font-bold text-lg tracking-wide">VectorEditor <span
+                    class="text-xs font-normal text-gray-400">Pro</span></h1>
         </div>
-        
+
         <div class="flex items-center gap-4">
-            <!-- Canvas Settings -->
-            <div class="flex items-center gap-2 bg-gray-900 px-3 py-1.5 rounded-md text-sm border border-gray-700">
-                <label class="text-gray-400">W:</label>
-                <input type="number" id="canvas-width" value="800" class="w-16 bg-transparent text-white border-none outline-none focus:ring-1 focus:ring-blue-500 text-right">
-                <label class="text-gray-400 ml-2">H:</label>
-                <input type="number" id="canvas-height" value="600" class="w-16 bg-transparent text-white border-none outline-none focus:ring-1 focus:ring-blue-500 text-right">
-                <button id="btn-resize" class="ml-2 bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded transition text-xs font-bold">Apply</button>
+
+
+            <!-- Botones de Historial (Deshacer / Rehacer) -->
+            <div class="flex items-center gap-2 border-r border-gray-700 pr-4">
+                <button id="btn-undo"
+                    class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition text-gray-300"
+                    title="Deshacer (Ctrl+Z)">
+                    <i class="fa-solid fa-arrow-rotate-left"></i>
+                </button>
+                <button id="btn-redo"
+                    class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition text-gray-300"
+                    title="Rehacer (Ctrl+Y)">
+                    <i class="fa-solid fa-arrow-rotate-right"></i>
+                </button>
             </div>
 
-            <!-- Export -->
+
+            <div class="flex items-center gap-2 bg-gray-900 px-3 py-1.5 rounded-md text-sm border border-gray-700">
+                <label class="text-gray-400">W:</label>
+                <input type="number" id="canvas-width" value="800"
+                    class="w-16 bg-transparent text-white border-none outline-none focus:ring-1 focus:ring-blue-500 text-right">
+                <label class="text-gray-400 ml-2">H:</label>
+                <input type="number" id="canvas-height" value="600"
+                    class="w-16 bg-transparent text-white border-none outline-none focus:ring-1 focus:ring-blue-500 text-right">
+                <button id="btn-resize"
+                    class="ml-2 bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded transition text-xs font-bold">Apply</button>
+            </div>
+
             <div class="flex items-center gap-2 border-l border-gray-700 pl-4">
-                <button onclick="exportArt('svg')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 text-orange-400">
+                <button onclick="exportArt('svg')"
+                    class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 text-orange-400">
                     <i class="fa-solid fa-file-code"></i> SVG
                 </button>
-                <button onclick="exportArt('png')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 text-green-400">
+                <button onclick="exportArt('png')"
+                    class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 text-green-400">
                     <i class="fa-solid fa-image"></i> PNG
                 </button>
-                <button onclick="exportArt('jpg')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 text-blue-400">
+                <button onclick="exportArt('jpg')"
+                    class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 text-blue-400">
                     <i class="fa-solid fa-file-image"></i> JPG
                 </button>
             </div>
@@ -117,196 +172,711 @@
     </header>
 
     <div class="flex flex-1 overflow-hidden">
-        
-        <!-- Left Toolbar (Tools) -->
+
         <aside class="w-16 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-4 gap-2 shrink-0 z-10">
-            <button class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-400" data-tool="select" title="Selection Tool (V) - Move whole objects">
+            <button
+                class="tool-btn active w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-400"
+                data-tool="select" title="Selection Tool (V) - Move & Scale objects">
                 <i class="fa-solid fa-arrow-pointer"></i>
             </button>
-            <button class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-white drop-shadow-md" data-tool="direct" title="Direct Selection Tool (A) - Edit nodes and handles">
-                <i class="fa-solid fa-arrow-pointer" style="transform: scaleX(-1); -webkit-text-stroke: 1px #9ca3af;"></i>
+            <button
+                class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-white drop-shadow-md relative"
+                data-tool="direct" title="Direct Selection Tool (A) - Edit nodes and handles">
+                <i class="fa-solid fa-arrow-pointer"
+                    style="transform: scaleX(-1); -webkit-text-stroke: 1px #9ca3af;"></i>
+                <span class="absolute bottom-0.5 right-1 text-[11px] font-bold text-blue-400 font-mono">D</span>
             </button>
-            <button class="tool-btn active w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-300" data-tool="pen" title="Pen Tool (P) - Draw Bézier curves">
+            <button
+                class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-300"
+                data-tool="pen" title="Pen Tool (P) - Draw Bézier curves. Hold Alt to convert.">
                 <i class="fa-solid fa-pen-nib"></i>
             </button>
-            <button class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-300" data-tool="convert" title="Convert Anchor Tool (Shift+C) - Toggle smooth/corner nodes">
+            <button
+                class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-300"
+                data-tool="convert" title="Convert Anchor Tool (Shift+C) - Toggle smooth/corner nodes">
                 <i class="fa-solid fa-angle-up text-lg"></i>
             </button>
-            <button class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-300" data-tool="text" title="Text Tool (T)">
+            <button
+                class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-300"
+                data-tool="text" title="Text Tool (T)">
                 <i class="fa-solid fa-t"></i>
             </button>
-            
+
+            <button
+                class="w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-green-400 relative overflow-hidden transition mt-1"
+                title="Upload Image">
+                <i class="fa-solid fa-image"></i>
+                <input type="file" id="image-upload" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer">
+            </button>
+
             <div class="w-8 h-px bg-gray-700 my-2"></div>
-            
-            <button id="btn-delete" class="w-10 h-10 rounded-lg hover:bg-red-900/50 text-red-400 flex items-center justify-center transition" title="Delete Selected (Del)">
+
+            <button id="btn-delete"
+                class="w-10 h-10 rounded-lg hover:bg-red-900/50 text-red-400 flex items-center justify-center transition"
+                title="Delete Selected (Del)">
                 <i class="fa-solid fa-trash-can"></i>
             </button>
-            
+
             <div class="flex-1"></div>
-            
-            <button id="btn-clear" class="w-10 h-10 rounded-lg bg-gray-900 hover:bg-red-600 text-gray-400 hover:text-white flex items-center justify-center transition" title="Clear Canvas">
+
+            <button id="btn-clear"
+                class="w-10 h-10 rounded-lg bg-gray-900 hover:bg-red-600 text-gray-400 hover:text-white flex items-center justify-center transition"
+                title="Clear Canvas">
                 <i class="fa-solid fa-burst"></i>
             </button>
         </aside>
 
-        <!-- Workspace (Canvas area) -->
         <main id="workspace" class="flex-1 relative">
             <div class="canvas-container" id="canvas-wrapper">
-                <canvas id="c" width="800" height="600"></canvas>
+                <canvas id="c" resize="true"></canvas>
             </div>
         </main>
 
-        <!-- Right Sidebar (Properties) -->
-        <aside class="w-64 bg-gray-800 border-l border-gray-700 p-5 shrink-0 overflow-y-auto z-10 flex flex-col gap-6">
-            
-            <div>
-                <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-700 pb-2">Appearance</h2>
+        <aside class="w-64 bg-gray-800 border-l border-gray-700 flex flex-col shrink-0 z-10">
+
+            <!-- Properties Section -->
+            <div class="flex-1 overflow-y-auto p-5">
+                <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-700 pb-2">
+                    Appearance</h2>
                 <div id="no-selection-msg" class="text-sm text-gray-500 italic">No object selected.</div>
-                
+
                 <div id="properties-panel" class="hidden flex-col gap-5">
-                    
-                    <!-- Text Content (Only visible for text) -->
+
+                    <!-- Raster Properties (Vectorization) -->
+                    <div id="raster-prop-group" class="hidden flex-col gap-3 pb-3 border-b border-gray-700">
+                        <label class="text-sm text-gray-300">Image Tracing</label>
+                        <button id="btn-vectorize"
+                            class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold py-2 rounded flex justify-center items-center gap-2 shadow-lg transition text-sm">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Vectorizar
+                        </button>
+                    </div>
+
+                    <!-- Escala de Imagen (Slider) -->
+                    <div id="scale-prop-group" class="hidden flex-col gap-2 pb-3 border-b border-gray-700">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-sm text-gray-300">Escala de Imagen</label>
+                            <span id="scale-val"
+                                class="text-xs font-mono bg-gray-900 px-2 py-1 rounded text-gray-300">100%</span>
+                        </div>
+                        <input type="range" id="prop-scale" min="0.1" max="3" step="0.05" value="1"
+                            class="w-full accent-blue-500">
+                    </div>
+
+                    <!-- Buscatrazos -->
+                    <div id="pathfinder-prop-group" class="hidden flex-col gap-2 pb-3 border-b border-gray-700">
+                        <label class="text-sm text-gray-300">Buscatrazos</label>
+                        <div class="grid grid-cols-4 gap-2">
+                            <button id="pf-unite"
+                                class="bg-gray-700 hover:bg-gray-600 p-2 rounded text-gray-300 transition"
+                                title="Unificar"><i class="fa-solid fa-object-group"></i></button>
+                            <button id="pf-subtract"
+                                class="bg-gray-700 hover:bg-gray-600 p-2 rounded text-gray-300 transition"
+                                title="Restar Frente"><i class="fa-solid fa-subtract"></i></button>
+                            <button id="pf-intersect"
+                                class="bg-gray-700 hover:bg-gray-600 p-2 rounded text-gray-300 transition"
+                                title="Intersección"><i class="fa-solid fa-code-merge"></i></button>
+                            <button id="pf-exclude"
+                                class="bg-gray-700 hover:bg-gray-600 p-2 rounded text-gray-300 transition"
+                                title="Excluir"><i class="fa-solid fa-arrows-split-up-and-left"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Text Content -->
                     <div id="text-prop-group" class="hidden flex-col gap-2">
                         <label class="text-sm text-gray-300">Text Content</label>
-                        <input type="text" id="prop-text" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-blue-500 outline-none" placeholder="Type here...">
+                        <input type="text" id="prop-text"
+                            class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-blue-500 outline-none"
+                            placeholder="Type here...">
                     </div>
 
-                    <!-- Colors -->
-                    <div class="flex items-center justify-between">
-                        <label class="text-sm text-gray-300">Fill</label>
-                        <div class="flex items-center gap-2">
-                            <button id="btn-no-fill" class="transparent-btn" title="Remove Fill"></button>
-                            <span id="fill-hex" class="text-xs text-gray-400 uppercase font-mono w-14">NONE</span>
-                            <input type="color" id="prop-fill" value="#000000">
+                    <div id="color-prop-group" class="flex flex-col gap-5">
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm text-gray-300">Fill</label>
+                            <div class="flex items-center gap-2">
+                                <button id="btn-no-fill" class="transparent-btn" title="Remove Fill"></button>
+                                <span id="fill-hex" class="text-xs text-gray-400 uppercase font-mono w-14">NONE</span>
+                                <input type="color" id="prop-fill" value="#000000">
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="flex items-center justify-between">
-                        <label class="text-sm text-gray-300">Stroke</label>
-                        <div class="flex items-center gap-2">
-                            <button id="btn-no-stroke" class="transparent-btn" title="Remove Stroke"></button>
-                            <span id="stroke-hex" class="text-xs text-gray-400 uppercase font-mono w-14">#000000</span>
-                            <input type="color" id="prop-stroke" value="#000000">
+
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm text-gray-300">Stroke</label>
+                            <div class="flex items-center gap-2">
+                                <button id="btn-no-stroke" class="transparent-btn" title="Remove Stroke"></button>
+                                <span id="stroke-hex"
+                                    class="text-xs text-gray-400 uppercase font-mono w-14">#000000</span>
+                                <input type="color" id="prop-stroke" value="#000000">
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="text-sm text-gray-300">Stroke Width</label>
+                                <span id="stroke-width-val"
+                                    class="text-xs font-mono bg-gray-900 px-2 py-1 rounded text-gray-300">2 px</span>
+                            </div>
+                            <input type="range" id="prop-stroke-width" min="0" max="50" value="2"
+                                class="w-full accent-blue-500">
                         </div>
                     </div>
 
-                    <!-- Stroke Width -->
-                    <div>
-                        <div class="flex justify-between items-center mb-2">
-                            <label class="text-sm text-gray-300">Stroke Width</label>
-                            <span id="stroke-width-val" class="text-xs font-mono bg-gray-900 px-2 py-1 rounded text-gray-300">2 px</span>
-                        </div>
-                        <input type="range" id="prop-stroke-width" min="0" max="50" value="2" class="w-full accent-blue-500">
-                    </div>
-
-                    <!-- Opacity -->
                     <div>
                         <div class="flex justify-between items-center mb-2">
                             <label class="text-sm text-gray-300">Opacity</label>
-                            <span id="opacity-val" class="text-xs font-mono bg-gray-900 px-2 py-1 rounded text-gray-300">100%</span>
+                            <span id="opacity-val"
+                                class="text-xs font-mono bg-gray-900 px-2 py-1 rounded text-gray-300">100%</span>
                         </div>
-                        <input type="range" id="prop-opacity" min="0" max="1" step="0.01" value="1" class="w-full accent-blue-500">
+                        <input type="range" id="prop-opacity" min="0" max="1" step="0.01" value="1"
+                            class="w-full accent-blue-500">
                     </div>
-                    
-                    <!-- Actions -->
+
                     <div class="grid grid-cols-2 gap-2 mt-2">
-                        <button id="btn-bring-front" class="bg-gray-700 hover:bg-gray-600 py-2 rounded text-xs font-semibold text-gray-300 transition">
-                            Bring Front
-                        </button>
-                        <button id="btn-send-back" class="bg-gray-700 hover:bg-gray-600 py-2 rounded text-xs font-semibold text-gray-300 transition">
-                            Send Back
-                        </button>
+                        <button id="btn-bring-front"
+                            class="bg-gray-700 hover:bg-gray-600 py-2 rounded text-xs font-semibold text-gray-300 transition">Bring
+                            Front</button>
+                        <button id="btn-send-back"
+                            class="bg-gray-700 hover:bg-gray-600 py-2 rounded text-xs font-semibold text-gray-300 transition">Send
+                            Back</button>
                     </div>
                 </div>
             </div>
-            
-            <div class="mt-auto">
-                <div class="bg-gray-900 p-3 rounded-lg border border-gray-700 text-xs text-gray-400 space-y-2">
-                    <p><strong class="text-gray-300">Pen (P):</strong> Click for corners, drag for curves. Hold <kbd class="bg-gray-700 px-1 rounded">Alt</kbd> to edit nodes (Convert Anchor).</p>
-                    <p><strong class="text-gray-300">Convert (Shift+C):</strong> Click node to make straight, drag node to make curved.</p>
+
+            <!-- Layers Panel -->
+            <div class="h-64 flex flex-col border-t border-gray-700 bg-gray-900">
+                <div class="p-3 border-b border-gray-700 flex justify-between items-center bg-gray-800">
+                    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Capas (Layers)</h2>
+                    <button id="btn-new-layer" class="text-gray-300 hover:text-white transition" title="Nueva Capa">
+                        <i class="fa-solid fa-plus-square"></i>
+                    </button>
+                </div>
+                <div id="layers-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+                    <!-- Layer rows injected here via JS -->
                 </div>
             </div>
 
         </aside>
     </div>
 
-    <!-- Custom Dialog Modal (Replaces confirm/alert) -->
-    <div id="modal-overlay" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-gray-800 border border-gray-700 p-6 rounded-lg shadow-2xl max-w-sm w-full transform transition-all">
-            <h3 id="modal-title" class="text-lg font-bold text-white mb-2">Clear Canvas?</h3>
-            <p id="modal-desc" class="text-gray-400 text-sm mb-6">This action cannot be undone. Are you sure you want to remove all vectors?</p>
+    <!-- Clear Canvas Modal -->
+    <div id="modal-overlay"
+        class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div
+            class="bg-gray-800 border border-gray-700 p-6 rounded-lg shadow-2xl max-w-sm w-full transform transition-all">
+            <h3 class="text-lg font-bold text-white mb-2">Clear Canvas?</h3>
+            <p class="text-gray-400 text-sm mb-6">This action cannot be undone. Are you sure you want to remove all
+                vectors?</p>
             <div class="flex justify-end gap-3">
-                <button id="modal-btn-cancel" class="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition">Cancel</button>
-                <button id="modal-btn-confirm" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded transition shadow-lg">Clear All</button>
+                <button id="modal-btn-cancel"
+                    class="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition">Cancel</button>
+                <button id="modal-btn-confirm"
+                    class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded transition shadow-lg">Clear
+                    All</button>
             </div>
         </div>
     </div>
 
+    <!-- Vectorize Modal -->
+    <div id="modal-vectorize"
+        class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div
+            class="bg-gray-800 border border-gray-700 p-6 rounded-lg shadow-2xl max-w-sm w-full transform transition-all">
+            <h3 class="text-lg font-bold text-white mb-2"><i
+                    class="fa-solid fa-wand-magic-sparkles text-purple-400 mr-2"></i> Auto-Vectorizar</h3>
+            <p class="text-gray-400 text-sm mb-6">Convierte la imagen rasterizada en curvas matemáticas editables.</p>
+            <div class="flex flex-col gap-3">
+                <button id="vec-color"
+                    class="w-full py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white text-sm font-bold rounded transition shadow-lg">
+                    A todo color
+                </button>
+                <button id="vec-bw"
+                    class="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-bold rounded transition shadow-lg">
+                    Siluetas (Blanco y Negro)
+                </button>
+                <button id="vec-cancel"
+                    class="w-full py-2 mt-2 text-sm font-medium text-gray-400 hover:text-white transition">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menú Contextual Flotante -->
+    <div id="context-menu"
+        class="hidden absolute z-50 bg-gray-800 border border-gray-700 rounded-md shadow-xl py-1 text-sm text-gray-300 w-48">
+        <button id="ctx-group"
+            class="w-full text-left px-4 py-2 hover:bg-gray-700 hover:text-white flex justify-between">
+            <span><i class="fa-solid fa-object-group mr-2"></i>Agrupar</span>
+            <span class="text-xs text-gray-500">Ctrl+G</span>
+        </button>
+        <button id="ctx-ungroup"
+            class="w-full text-left px-4 py-2 hover:bg-gray-700 hover:text-white flex justify-between">
+            <span><i class="fa-solid fa-object-ungroup mr-2"></i>Desagrupar</span>
+        </button>
+        <div class="h-px bg-gray-700 my-1"></div>
+        <div class="px-4 py-2 text-xs font-bold text-gray-500 uppercase">Mover a capa</div>
+        <div id="ctx-layers-list" class="max-h-32 overflow-y-auto"></div>
+    </div>
+
     <script>
-        // Install Paper.js in the global scope
         paper.install(window);
 
-        window.onload = function() {
-            // Setup canvas
+        window.onload = function () {
             paper.setup('c');
-            
-            // Background setup for exports (Locked white rectangle)
-            let bgLayer = new Layer();
-            bgLayer.name = 'background';
-            let bgRect = new Path.Rectangle(new Point(0, 0), paper.view.viewSize);
+
+            // 1. Background Layer (Locked permanently)
+            // 1. Background Layer (Locked permanently)
+            let artboardWidth = 800;
+            let artboardHeight = 600;
+            let bgLayer = new Layer({ name: 'background', locked: true });
+
+            // Centramos el rectángulo blanco en la vista
+            let bgRect = new Path.Rectangle({
+                point: [(paper.view.size.width - artboardWidth) / 2, (paper.view.size.height - artboardHeight) / 2],
+                size: [artboardWidth, artboardHeight],
+                fillColor: 'white',
+                shadowColor: 'rgba(0,0,0,0.3)',
+                shadowBlur: 15,
+                shadowOffset: new Point(0, 5)
+            });
+
             bgRect.fillColor = 'white';
-            bgLayer.locked = true; // Prevent selection/interaction
-            
-            // Main drawing layer
-            let mainLayer = new Layer();
-            mainLayer.name = 'main';
+
+            // 2. Main Initial Layer
+            // 2. Main Initial Layer
+            let mainLayer = new Layer({ name: 'Capa 1' });
+
+            // 3. UI Layer (Ignorada por hit test)
+            let uiLayer = new Layer({ name: 'uiLayer', locked: true });
+
+
+            // --- SISTEMA DE HISTORIAL (DESHACER / REHACER) ---
+            // --- SISTEMA DE HISTORIAL (DESHACER / REHACER) ---
+            let historyStack = [];
+            let historyStep = -1;
+
+            function saveState() {
+                if (historyStep < historyStack.length - 1) {
+                    historyStack.length = historyStep + 1;
+                }
+                let exportData = project.layers
+                    .filter(l => l.name !== 'background' && l.name !== 'uiLayer')
+                    .map(l => l.exportJSON());
+
+                historyStack.push(exportData);
+                historyStep++;
+            }
+
+            function restoreState(step) {
+                if (step < 0 || step >= historyStack.length) return;
+                let layersToRemove = project.layers.filter(l => l.name !== 'background' && l.name !== 'uiLayer');
+                layersToRemove.forEach(l => l.remove());
+
+                let savedData = historyStack[step];
+                savedData.forEach(json => {
+                    let layer = new Layer();
+                    layer.importJSON(json);
+                });
+
+                uiLayer.bringToFront();
+                let userLayers = project.layers.filter(l => l.name !== 'background' && l.name !== 'uiLayer');
+                if (userLayers.length > 0) userLayers[userLayers.length - 1].activate();
+
+                project.deselectAll();
+                updateUISelection();
+                drawBoundingBox();
+                renderLayersUI();
+                paper.view.draw();
+            }
+
+            document.getElementById('btn-undo').addEventListener('click', () => {
+                if (historyStep > 0) { historyStep--; restoreState(historyStep); }
+            });
+
+            document.getElementById('btn-redo').addEventListener('click', () => {
+                if (historyStep < historyStack.length - 1) { historyStep++; restoreState(historyStep); }
+            });
+
+            // Guardar el estado inicial
+            saveState();
+
+
+            let bboxGroup = new Group();
+            uiLayer.addChild(bboxGroup);
+            let hoverIndicator = new Path.Circle({ center: [0, 0], radius: 6, strokeColor: '#3b82f6', strokeWidth: 2, visible: false });
+            uiLayer.addChild(hoverIndicator);
+
+            // ¡CORRECCIÓN CRÍTICA! Activamos Capa 1 al final para que los dibujos vayan aquí
             mainLayer.activate();
 
-            // Default Styles
-            let currentFillColor = null; // null = transparent
+            uiLayer.addChild(bboxGroup);
+
+            let currentFillColor = null;
             let currentStrokeColor = '#3b82f6';
             let currentStrokeWidth = 2;
+            let activeTool = 'select';
+            let isSpacebarDown = false;
+            let lastPanPoint = null;
 
-            // Hover Indicator for Pen Tool Interactions
-            let hoverIndicator = new Path.Circle({
-                center: [0, 0],
-                radius: 6,
-                strokeColor: '#3b82f6',
-                strokeWidth: 2,
-                visible: false
+
+
+            function renderLayersUI() {
+                const list = document.getElementById('layers-list');
+                list.innerHTML = '';
+
+                for (let i = project.layers.length - 1; i >= 0; i--) {
+                    let layer = project.layers[i];
+                    if (layer.name === 'background' || layer.name === 'uiLayer') continue;
+
+                    let isActive = (project.activeLayer === layer);
+
+                    let div = document.createElement('div');
+                    // Estilos mejorados: Azul intenso si está activo, transparente si no.
+                    div.className = `flex items-center gap-2 p-2 rounded cursor-pointer transition ${isActive ? 'bg-blue-600 text-white shadow-inner' : 'hover:bg-gray-700/50 text-gray-400'}`;
+                    if (isActive) div.id = 'active-layer-item';
+
+                    // Toggle Visibility
+                    let eye = document.createElement('button');
+                    eye.className = `text-sm w-6 ${layer.visible ? (isActive ? 'text-blue-100 hover:text-white' : 'text-gray-300 hover:text-white') : (isActive ? 'text-blue-300' : 'text-gray-600 hover:text-gray-400')}`;
+                    eye.innerHTML = `<i class="fa-solid ${layer.visible ? 'fa-eye' : 'fa-eye-slash'}"></i>`;
+                    eye.onclick = (e) => {
+                        e.stopPropagation();
+                        layer.visible = !layer.visible;
+                        if (!layer.visible) layer.children.forEach(c => c.selected = false);
+                        renderLayersUI();
+                        updateUISelection();
+                        drawBoundingBox();
+                        paper.view.draw();
+                    };
+
+                    // Toggle Lock
+                    let lock = document.createElement('button');
+                    lock.className = `text-sm w-6 ${layer.locked ? (isActive ? 'text-blue-100 hover:text-white' : 'text-gray-300 hover:text-white') : (isActive ? 'text-blue-300' : 'text-gray-600 hover:text-gray-400')}`;
+                    lock.innerHTML = `<i class="fa-solid ${layer.locked ? 'fa-lock' : 'fa-lock-open'}"></i>`;
+                    lock.onclick = (e) => {
+                        e.stopPropagation();
+                        layer.locked = !layer.locked;
+                        if (layer.locked) layer.children.forEach(c => c.selected = false);
+                        renderLayersUI();
+                        updateUISelection();
+                        drawBoundingBox();
+                        paper.view.draw();
+                    };
+
+                    let nameSpan = document.createElement('span');
+                    nameSpan.className = `text-sm flex-1 truncate font-medium`;
+                    nameSpan.textContent = layer.name;
+
+                    div.onclick = () => {
+                        if (layer.locked) return;
+                        layer.activate();
+                        uiLayer.bringToFront();
+                        renderLayersUI();
+                    };
+
+                    div.appendChild(eye);
+                    div.appendChild(lock);
+                    div.appendChild(nameSpan);
+                    list.appendChild(div);
+                }
+            }
+
+            document.getElementById('btn-new-layer').addEventListener('click', () => {
+                let layerCount = project.layers.length - 1; // excluding background & uiLayer mathematically roughly
+                let newL = new Layer({ name: 'Capa ' + layerCount });
+                newL.activate();
+                uiLayer.bringToFront();
+                renderLayersUI();
             });
-            hoverIndicator.locked = true;
 
-            // Global State Variables
-            let activeTool = 'pen';
-            let currentDrawingPath = null;
-            let hoverState = null; 
-            let resumePath = null;
-            
-            // 1. PEN TOOL (Bézier Drawing + Alt-Modifier Convert)
+            function drawBoundingBox() {
+                bboxGroup.removeChildren();
+
+                if (activeTool !== 'select') return; // Only show in main Select tool
+
+                let items = project.selectedItems.filter(i => i.layer.name !== 'background' && i.layer.name !== 'uiLayer');
+                if (items.length === 0) return;
+
+                // Calculate united bounds for all selected items
+                let bounds = items[0].bounds;
+                for (let i = 1; i < items.length; i++) bounds = bounds.unite(items[i].bounds);
+
+                // Dynamic scaling for crisp ui elements independent of zoom
+                let z = paper.view.zoom;
+
+                let rect = new Path.Rectangle(bounds);
+                rect.strokeColor = '#3b82f6';
+                rect.strokeWidth = 1.5 / z;
+                rect.fillColor = null;
+                bboxGroup.addChild(rect);
+
+                let corners = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'];
+                let cursors = ['nw-resize', 'ne-resize', 'sw-resize', 'se-resize'];
+
+                corners.forEach((corner, idx) => {
+                    let handle = new Path.Rectangle({
+                        center: bounds[corner],
+                        size: [8 / z, 8 / z],
+                        fillColor: 'white',
+                        strokeColor: '#3b82f6',
+                        strokeWidth: 1 / z,
+                        name: 'handle_' + corner
+                    });
+                    handle.cursorName = cursors[idx];
+                    handle.cornerName = corner;
+                    bboxGroup.addChild(handle);
+                });
+            }
+
+            // Centralized custom hit-test function that respects Layers visibility and lock status
+            function customHitTest(point, options) {
+                return project.hitTest(point, {
+                    ...options,
+                    match: function (res) {
+                        return !res.item.locked &&
+                            !res.item.layer.locked &&
+                            res.item.layer.visible &&
+                            res.item.layer.name !== 'background' &&
+                            res.item.layer.name !== 'uiLayer';
+                    }
+                });
+            }
+
+            let selectTool = new Tool();
+            let selectHitItem = null;
+            let scaleActive = false;
+            let scaleOrigin = null;
+            let itemsToScale = [];
+
+            // Variables para el recuadro de selección (Marquee)
+            let marqueePath = null;
+            let marqueeStart = null;
+
+            selectTool.onMouseMove = function (event) {
+                if (isSpacebarDown) return;
+
+                uiLayer.locked = false;
+                let hitHandle = uiLayer.hitTest(event.point, { fill: true, bounds: true, tolerance: 5 / paper.view.zoom });
+                uiLayer.locked = true;
+
+                if (hitHandle && hitHandle.item.cursorName) {
+                    paper.view.element.style.cursor = hitHandle.item.cursorName;
+                    return;
+                }
+
+                let hitResult = customHitTest(event.point, { fill: true, stroke: true, bounds: true, tolerance: 5 / paper.view.zoom });
+                paper.view.element.style.cursor = hitResult ? 'move' : 'default';
+            };
+
+            let selectIsDragging = false;
+
+            selectTool.onMouseDown = function (event) {
+                selectIsDragging = false;
+                if (isSpacebarDown) return;
+                selectHitItem = null;
+                marqueePath = null;
+
+                uiLayer.locked = false;
+                let hitHandle = uiLayer.hitTest(event.point, { fill: true, bounds: true, tolerance: 5 / paper.view.zoom });
+                uiLayer.locked = true;
+
+                if (hitHandle && hitHandle.item && hitHandle.item.cornerName) {
+                    scaleActive = true;
+                    itemsToScale = project.selectedItems.filter(i => i.layer.name !== 'background' && i.layer.name !== 'uiLayer');
+                    let bounds = itemsToScale[0].bounds;
+                    for (let i = 1; i < itemsToScale.length; i++) bounds = bounds.unite(itemsToScale[i].bounds);
+
+                    let oppositeMap = { 'topLeft': 'bottomRight', 'topRight': 'bottomLeft', 'bottomLeft': 'topRight', 'bottomRight': 'topLeft' };
+                    scaleOrigin = bounds[oppositeMap[hitHandle.item.cornerName]];
+                    return;
+                }
+
+                scaleActive = false;
+                let hitResult = customHitTest(event.point, { fill: true, stroke: true, bounds: true, tolerance: 5 / paper.view.zoom });
+
+                if (!hitResult) {
+                    // Si no tocamos nada y NO presionamos Shift, deseleccionamos todo
+                    if (!event.modifiers.shift) {
+                        project.deselectAll();
+                    }
+                    // Iniciamos el recuadro selector
+                    marqueeStart = event.point;
+                    marqueePath = new Path.Rectangle(marqueeStart, marqueeStart);
+                    marqueePath.fillColor = 'rgba(59, 130, 246, 0.15)'; // Tailwind blue-500 semi-transparente
+                    marqueePath.strokeColor = '#3b82f6';
+                    marqueePath.strokeWidth = 1 / paper.view.zoom;
+                    uiLayer.addChild(marqueePath);
+                    updateUISelection();
+                    drawBoundingBox();
+                    return;
+                }
+
+                selectHitItem = hitResult.item;
+
+                // Lógica para tecla SHIFT (Selección múltiple)
+                if (event.modifiers.shift) {
+                    selectHitItem.selected = !selectHitItem.selected; // Alternar estado
+                } else {
+                    if (!selectHitItem.selected) {
+                        project.deselectAll();
+                        selectHitItem.selected = true;
+                    }
+                }
+
+                if (selectHitItem.segments) selectHitItem.segments.forEach(seg => seg.selected = false);
+
+                updateUISelection();
+                drawBoundingBox();
+            };
+
+            selectTool.onMouseDrag = function (event) {
+                selectIsDragging = true;
+                if (isSpacebarDown) return;
+
+                // 1. Dibujar Recuadro Selector
+                if (marqueePath) {
+                    marqueePath.bounds = new Rectangle(marqueeStart, event.point);
+                    return;
+                }
+
+                // 2. Escalar 
+                if (scaleActive && scaleOrigin) {
+                    let lastVector = event.lastPoint.subtract(scaleOrigin);
+                    let currentVector = event.point.subtract(scaleOrigin);
+
+                    let sx = Math.abs(lastVector.x) > 0.0001 ? currentVector.x / lastVector.x : 1;
+                    let sy = Math.abs(lastVector.y) > 0.0001 ? currentVector.y / lastVector.y : 1;
+
+                    if (event.modifiers.shift) {
+                        let maxScale = Math.max(Math.abs(sx), Math.abs(sy));
+                        sx = sx < 0 ? -maxScale : maxScale;
+                        sy = sy < 0 ? -maxScale : maxScale;
+                    }
+
+                    itemsToScale.forEach(item => item.scale(sx, sy, scaleOrigin));
+                    drawBoundingBox();
+                    paper.view.draw();
+                    return;
+                }
+
+                // 3. Mover objetos
+                if (selectHitItem) {
+                    project.selectedItems.forEach(item => {
+                        if (item.layer.name !== 'background' && item.layer.name !== 'uiLayer') {
+                            item.position = item.position.add(event.delta);
+                        }
+                    });
+                    drawBoundingBox();
+                }
+            };
+
+            selectTool.onMouseUp = function (event) {
+                if (marqueePath) {
+                    let marqueeBounds = marqueePath.bounds;
+                    marqueePath.remove();
+                    marqueePath = null;
+
+                    let items = project.getItems({
+                        overlapping: marqueeBounds,
+                        match: function (res) {
+                            return res.layer && res.layer.name !== 'background' && res.layer.name !== 'uiLayer' && !res.locked && !res.layer.locked && res.layer.visible;
+                        }
+                    });
+
+                    items.forEach(item => {
+                        if (item.className === 'Path' || item.className === 'Shape' || item.className === 'Raster' || item.className === 'PointText' || item.className === 'Group') {
+                            item.selected = true;
+                        }
+                    });
+
+                    updateUISelection();
+                    drawBoundingBox();
+                }
+
+                // Si arrastramos o escalamos, guardamos en el historial
+                if (selectIsDragging) {
+                    saveState();
+                }
+
+                selectIsDragging = false;
+                scaleActive = false;
+            };
+
+
+            let directSelectTool = new Tool();
+            let dsHitSegment = null, dsHitPath = null, dsHitHandle = null;
+
+            directSelectTool.onMouseDown = function (event) {
+                if (isSpacebarDown) return;
+                dsHitSegment = dsHitPath = dsHitHandle = null;
+
+                let hitResult = customHitTest(event.point, {
+                    segments: true, handles: true, stroke: true, fill: true, tolerance: 8 / paper.view.zoom
+                });
+
+                if (!hitResult) {
+                    project.deselectAll();
+                    updateUISelection();
+                    return;
+                }
+
+                dsHitPath = hitResult.item;
+
+                if (hitResult.type === 'fill' || hitResult.type === 'stroke') {
+                    project.deselectAll();
+                    dsHitPath.selected = true;
+                } else {
+                    if (!dsHitPath.selected) {
+                        project.deselectAll();
+                        dsHitPath.selected = true;
+                    }
+                    if (hitResult.type === 'segment') {
+                        if (dsHitPath.segments) dsHitPath.segments.forEach(seg => seg.selected = false);
+                        hitResult.segment.selected = true;
+                        dsHitSegment = hitResult.segment;
+                    } else if (hitResult.type === 'handle-in') {
+                        dsHitHandle = 'handleIn';
+                        dsHitSegment = hitResult.segment;
+                    } else if (hitResult.type === 'handle-out') {
+                        dsHitHandle = 'handleOut';
+                        dsHitSegment = hitResult.segment;
+                    }
+                }
+                updateUISelection();
+            };
+
+            directSelectTool.onMouseDrag = function (event) {
+                if (isSpacebarDown) return;
+                if (dsHitSegment && dsHitHandle) dsHitSegment[dsHitHandle] = dsHitSegment[dsHitHandle].add(event.delta);
+                else if (dsHitSegment) dsHitSegment.point = dsHitSegment.point.add(event.delta);
+            };
+
             let penTool = new Tool();
+            let currentDrawingPath = null;
+            let hoverState = null;
+            let resumePath = null;
             let penConvertHitSegment = null;
             let penIsConvertDrag = false;
-            
-            penTool.onMouseMove = function(event) {
+
+            penTool.onMouseMove = function (event) {
+                if (isSpacebarDown) return;
                 hoverState = null;
                 hoverIndicator.visible = false;
                 resumePath = null;
                 paper.view.element.style.cursor = event.modifiers.alt ? 'pointer' : 'crosshair';
-                
-                if (event.modifiers.alt) return; // Don't show path closing guides while holding alt
+
+                if (event.modifiers.alt) return;
 
                 if (currentDrawingPath && currentDrawingPath.segments.length > 1) {
                     let firstSegment = currentDrawingPath.firstSegment;
-                    if (event.point.getDistance(firstSegment.point) < 10) {
+                    if (event.point.getDistance(firstSegment.point) < 10 / paper.view.zoom) {
                         hoverState = 'close';
                         hoverIndicator.position = firstSegment.point;
                         hoverIndicator.visible = true;
                         paper.view.element.style.cursor = 'pointer';
                     }
                 } else if (!currentDrawingPath) {
-                    let hit = project.hitTest(event.point, { ends: true, tolerance: 10 });
-                    if (hit && hit.item && hit.item.layer.name !== 'background' && !hit.item.closed) {
+                    let hit = customHitTest(event.point, { ends: true, tolerance: 10 / paper.view.zoom });
+                    if (hit && hit.item && !hit.item.closed) {
                         hoverState = 'resume';
                         hoverIndicator.position = hit.segment.point;
                         hoverIndicator.visible = true;
@@ -317,15 +887,17 @@
                 }
             };
 
-            penTool.onMouseDown = function(event) {
-                // ALT-KEY MODIFIER: Temporarily act as Convert Anchor Tool
+            penTool.onMouseDown = function (event) {
+                if (isSpacebarDown) return;
+
+                // Convert Mode via Alt
                 if (event.modifiers.alt || event.modifiers.option) {
-                    let hitResult = project.hitTest(event.point, { segments: true, tolerance: 8 });
-                    if (hitResult && hitResult.item.layer.name !== 'background') {
+                    let hitResult = customHitTest(event.point, { segments: true, tolerance: 8 / paper.view.zoom });
+                    if (hitResult) {
                         penConvertHitSegment = hitResult.segment;
                         penIsConvertDrag = false;
                     }
-                    return; // Bypass normal pen logic
+                    return;
                 }
 
                 if (hoverState === 'close' && currentDrawingPath) {
@@ -337,13 +909,13 @@
                     updateUISelection();
                     return;
                 }
-                
+
                 if (hoverState === 'resume' && resumePath) {
                     project.deselectAll();
                     currentDrawingPath = resumePath;
                     currentDrawingPath.selected = true;
                     hoverIndicator.visible = false;
-                    return; 
+                    return;
                 }
 
                 if (!currentDrawingPath) {
@@ -353,20 +925,17 @@
                     currentDrawingPath.strokeWidth = currentStrokeWidth;
                     currentDrawingPath.selected = true;
                 }
-                
                 currentDrawingPath.add(event.point);
             };
-            
-            penTool.onMouseDrag = function(event) {
-                // ALT-KEY MODIFIER: Drag to create symmetric curves
+
+            penTool.onMouseDrag = function (event) {
+                if (isSpacebarDown) return;
                 if (penConvertHitSegment) {
                     penIsConvertDrag = true;
                     penConvertHitSegment.handleOut = event.point.subtract(penConvertHitSegment.point);
                     penConvertHitSegment.handleIn = penConvertHitSegment.handleOut.multiply(-1);
                     return;
                 }
-
-                // Normal pen logic: Create smooth curve handles while drawing
                 if (currentDrawingPath && !event.modifiers.alt) {
                     let lastSegment = currentDrawingPath.lastSegment;
                     lastSegment.handleOut = event.point.subtract(lastSegment.point);
@@ -374,183 +943,171 @@
                 }
             };
 
-            penTool.onMouseUp = function(event) {
-                // ALT-KEY MODIFIER: Click to clear handles (straighten)
+            penTool.onMouseUp = function (event) {
+                if (isSpacebarDown) return;
                 if (penConvertHitSegment) {
-                    if (!penIsConvertDrag) {
-                        penConvertHitSegment.clearHandles();
-                    }
+                    if (!penIsConvertDrag) penConvertHitSegment.clearHandles();
                     penConvertHitSegment = null;
                 }
             };
 
-            // 2. CONVERT ANCHOR TOOL (Dedicated tool to toggle smooth/corner)
             let convertTool = new Tool();
             let cvHitSegment = null;
             let cvIsDrag = false;
 
-            convertTool.onMouseMove = function(event) {
+            convertTool.onMouseMove = function (event) {
+                if (isSpacebarDown) return;
                 paper.view.element.style.cursor = 'crosshair';
             }
-
-            convertTool.onMouseDown = function(event) {
-                cvHitSegment = null;
-                cvIsDrag = false;
-                
-                let hitResult = project.hitTest(event.point, { segments: true, tolerance: 8 });
-                if (hitResult && hitResult.item.layer.name !== 'background') {
-                    cvHitSegment = hitResult.segment;
-                }
+            convertTool.onMouseDown = function (event) {
+                if (isSpacebarDown) return;
+                cvHitSegment = null; cvIsDrag = false;
+                let hitResult = customHitTest(event.point, { segments: true, tolerance: 8 / paper.view.zoom });
+                if (hitResult) cvHitSegment = hitResult.segment;
             };
-
-            convertTool.onMouseDrag = function(event) {
+            convertTool.onMouseDrag = function (event) {
+                if (isSpacebarDown) return;
                 if (cvHitSegment) {
                     cvIsDrag = true;
-                    // Symmetrical handles based on drag distance/direction
                     cvHitSegment.handleOut = event.point.subtract(cvHitSegment.point);
                     cvHitSegment.handleIn = cvHitSegment.handleOut.multiply(-1);
                 }
             };
-
-            convertTool.onMouseUp = function(event) {
-                if (cvHitSegment && !cvIsDrag) {
-                    // Click without drag clears handles (converts to sharp corner)
-                    cvHitSegment.clearHandles();
-                }
+            convertTool.onMouseUp = function (event) {
+                if (isSpacebarDown) return;
+                if (cvHitSegment && !cvIsDrag) cvHitSegment.clearHandles();
                 cvHitSegment = null;
             };
 
-            // 3. SELECTION TOOL (Black Arrow - Object Selection)
-            let selectTool = new Tool();
-            let hitPath = null;
-            
-            selectTool.onMouseDown = function(event) {
-                hitPath = null;
-                let hitResult = project.hitTest(event.point, { fill: true, stroke: true, tolerance: 5, bounds: true });
-                
-                if (!hitResult) {
-                    project.deselectAll();
-                    updateUISelection();
-                    return;
-                }
-
-                if (hitResult.item && hitResult.item.layer.name !== 'background') {
-                    hitPath = hitResult.item;
-                    if (!event.modifiers.shift) project.deselectAll();
-                    hitPath.selected = true;
-                    // Disable segment selection so handles don't show
-                    if (hitPath.segments) hitPath.segments.forEach(seg => seg.selected = false); 
-                    updateUISelection();
-                }
-            };
-
-            selectTool.onMouseDrag = function(event) {
-                if (hitPath) hitPath.position = hitPath.position.add(event.delta);
-            };
-
-            // 4. DIRECT SELECTION TOOL (White Arrow - Node & Handle Editing)
-            let directSelectTool = new Tool();
-            let dsHitSegment = null, dsHitPath = null, dsHitHandle = null;
-
-            directSelectTool.onMouseDown = function(event) {
-                dsHitSegment = dsHitPath = dsHitHandle = null;
-                let hitResult = project.hitTest(event.point, {
-                    segments: true, handles: true, stroke: true, fill: true, tolerance: 8
-                });
-                
-                if (!hitResult) {
-                    project.deselectAll();
-                    updateUISelection();
-                    return;
-                }
-
-                if (hitResult.item && hitResult.item.layer.name !== 'background') {
-                    dsHitPath = hitResult.item;
-                    
-                    if (hitResult.type === 'fill' || hitResult.type === 'stroke') {
-                        project.deselectAll();
-                        dsHitPath.selected = true;
-                    } 
-                    else {
-                        if (!dsHitPath.selected) {
-                            project.deselectAll();
-                            dsHitPath.selected = true;
-                        }
-                        
-                        if (hitResult.type === 'segment') {
-                            if (dsHitPath.segments) dsHitPath.segments.forEach(seg => seg.selected = false);
-                            hitResult.segment.selected = true;
-                            dsHitSegment = hitResult.segment;
-                        } else if (hitResult.type === 'handle-in') {
-                            dsHitHandle = 'handleIn';
-                            dsHitSegment = hitResult.segment;
-                        } else if (hitResult.type === 'handle-out') {
-                            dsHitHandle = 'handleOut';
-                            dsHitSegment = hitResult.segment;
-                        }
-                    }
-                    updateUISelection();
-                }
-            };
-
-            directSelectTool.onMouseDrag = function(event) {
-                if (dsHitSegment && dsHitHandle) {
-                    dsHitSegment[dsHitHandle] = dsHitSegment[dsHitHandle].add(event.delta);
-                } else if (dsHitSegment) {
-                    dsHitSegment.point = dsHitSegment.point.add(event.delta);
-                }
-            };
-
-            // 5. TEXT TOOL
             let textTool = new Tool();
-            textTool.onMouseDown = function(event) {
+            textTool.onMouseDown = function (event) {
+                if (isSpacebarDown) return;
                 project.deselectAll();
                 let text = new PointText(event.point);
                 text.content = "New Text";
-                text.fillColor = currentFillColor || '#000000'; 
+                text.fillColor = currentFillColor || '#000000';
                 text.strokeColor = currentStrokeColor !== 'none' ? currentStrokeColor : null;
                 text.strokeWidth = currentStrokeWidth;
                 text.fontSize = 32;
                 text.fontFamily = 'Inter';
                 text.selected = true;
                 updateUISelection();
-                
-                // Auto switch to select tool
+
                 document.querySelector('[data-tool="select"]').click();
-                
-                // Focus the text input
                 setTimeout(() => document.getElementById('prop-text').focus(), 50);
             };
 
-            // Tool Switching Logic
             const toolBtns = document.querySelectorAll('.tool-btn');
             toolBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
                     toolBtns.forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     activeTool = btn.dataset.tool;
-                    
+
                     hoverIndicator.visible = false;
                     paper.view.element.style.cursor = 'default';
-                    
-                    if(activeTool !== 'pen' && currentDrawingPath) {
-                        if(currentDrawingPath.segments.length < 2) currentDrawingPath.remove();
+                    drawBoundingBox(); // clear or draw depending on tool
+
+                    if (activeTool !== 'pen' && currentDrawingPath) {
+                        if (currentDrawingPath.segments.length < 2) currentDrawingPath.remove();
                         currentDrawingPath.selected = false;
                         currentDrawingPath = null;
                     }
-                    
-                    if(activeTool === 'pen') penTool.activate();
-                    else if(activeTool === 'select') selectTool.activate();
-                    else if(activeTool === 'direct') directSelectTool.activate();
-                    else if(activeTool === 'convert') convertTool.activate();
-                    else if(activeTool === 'text') textTool.activate();
+
+                    if (activeTool === 'pen') penTool.activate();
+                    else if (activeTool === 'select') selectTool.activate();
+                    else if (activeTool === 'direct') directSelectTool.activate();
+                    else if (activeTool === 'convert') convertTool.activate();
+                    else if (activeTool === 'text') textTool.activate();
                 });
             });
 
-            // Set default tool
-            penTool.activate();
+            selectTool.activate();
 
-            // Properties Panel UI Sync
+            // Panning
+            const workspace = document.getElementById('workspace');
+            workspace.addEventListener('mousedown', (e) => {
+                if (isSpacebarDown) {
+                    lastPanPoint = new Point(e.clientX, e.clientY);
+                    document.body.style.cursor = 'grabbing';
+                }
+            });
+            workspace.addEventListener('mousemove', (e) => {
+                if (isSpacebarDown && lastPanPoint) {
+                    const currentPoint = new Point(e.clientX, e.clientY);
+                    const delta = currentPoint.subtract(lastPanPoint);
+                    paper.view.center = paper.view.center.subtract(delta.divide(paper.view.zoom));
+                    lastPanPoint = currentPoint;
+                }
+            });
+            window.addEventListener('mouseup', () => {
+                if (isSpacebarDown) document.body.style.cursor = 'grab';
+                lastPanPoint = null;
+            });
+
+            // Zooming
+            workspace.addEventListener('wheel', (e) => {
+                if (e.altKey) {
+                    e.preventDefault();
+                    const rect = paper.view.element.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+
+                    if (mouseX < 0 || mouseY < 0 || mouseX > rect.width || mouseY > rect.height) return;
+
+                    const mousePosition = new Point(mouseX, mouseY);
+                    const viewPosition = paper.view.viewToProject(mousePosition);
+
+                    const zoomDirection = e.deltaY > 0 ? -1 : 1;
+                    let newZoom = paper.view.zoom * (1 + zoomDirection * 0.1);
+
+                    if (newZoom < 0.1) newZoom = 0.1;
+                    if (newZoom > 20) newZoom = 20;
+
+                    const zoomRatio = paper.view.zoom / newZoom;
+                    const offset = viewPosition.subtract(paper.view.center);
+
+                    paper.view.zoom = newZoom;
+                    paper.view.center = viewPosition.subtract(offset.multiply(zoomRatio));
+                    drawBoundingBox(); // Redraw UI handles to adjust their size visually
+                }
+            }, { passive: false });
+
+            window.addEventListener('keydown', (e) => {
+                if (e.target.tagName.toLowerCase() === 'input') return;
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    isSpacebarDown = true;
+                    document.body.style.cursor = 'grab';
+                }
+                if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
+                if (e.key.toLowerCase() === 'v') document.querySelector('[data-tool="select"]').click();
+                if (e.key.toLowerCase() === 'a') document.querySelector('[data-tool="direct"]').click();
+                if (e.key.toLowerCase() === 'p') document.querySelector('[data-tool="pen"]').click();
+                if (e.key.toLowerCase() === 'c' && e.shiftKey) document.querySelector('[data-tool="convert"]').click();
+                if (e.key.toLowerCase() === 't') document.querySelector('[data-tool="text"]').click();
+
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                    e.preventDefault();
+                    if (e.shiftKey) document.getElementById('btn-redo').click();
+                    else document.getElementById('btn-undo').click();
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                    e.preventDefault();
+                    document.getElementById('btn-redo').click();
+                }
+
+            });
+
+
+            window.addEventListener('keyup', (e) => {
+                if (e.code === 'Space') {
+                    isSpacebarDown = false;
+                    document.body.style.cursor = 'default';
+                    lastPanPoint = null;
+                }
+            });
+
             const panel = document.getElementById('properties-panel');
             const noSelMsg = document.getElementById('no-selection-msg');
             const propFill = document.getElementById('prop-fill');
@@ -561,58 +1118,88 @@
             const strokeWidthVal = document.getElementById('stroke-width-val');
             const propOpacity = document.getElementById('prop-opacity');
             const opacityVal = document.getElementById('opacity-val');
+
             const textPropGroup = document.getElementById('text-prop-group');
+            const colorPropGroup = document.getElementById('color-prop-group');
+            const rasterPropGroup = document.getElementById('raster-prop-group');
             const propText = document.getElementById('prop-text');
 
-            function rgbToHex(r, g, b) {
-                return "#" + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1);
+            function rgbToHex(r, g, b) { return "#" + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1); }
+            function getHexColor(paperColor) {
+                if (!paperColor) return null;
+                return rgbToHex(Math.round(paperColor.red * 255), Math.round(paperColor.green * 255), Math.round(paperColor.blue * 255));
             }
 
-            function getHexColor(paperColor) {
-                if(!paperColor) return null;
-                return rgbToHex(Math.round(paperColor.red*255), Math.round(paperColor.green*255), Math.round(paperColor.blue*255));
-            }
+            const scalePropGroup = document.getElementById('scale-prop-group');
+            const propScale = document.getElementById('prop-scale');
+            const scaleVal = document.getElementById('scale-val');
+
+            const pathfinderPropGroup = document.getElementById('pathfinder-prop-group'); // Añadir arriba
 
             function updateUISelection() {
-                let selectedItems = project.selectedItems.filter(item => item.layer.name !== 'background');
-                
+                let selectedItems = project.selectedItems.filter(item => item.layer.name !== 'background' && item.layer.name !== 'uiLayer');
+
                 if (selectedItems.length > 0) {
                     let item = selectedItems[0];
+
+                    // Lógica del Buscatrazos (Mostrar si hay 2+ trazos seleccionados)
+                    let isMultiPath = selectedItems.length >= 2 && selectedItems.every(i => i.className === 'Path' || i.className === 'CompoundPath' || i.className === 'Shape');
+                    pathfinderPropGroup.classList.toggle('hidden', !isMultiPath);
+                    pathfinderPropGroup.classList.toggle('flex', isMultiPath);
+
+                    // ... (conserva el resto del código que ya tienes aquí)
+
+
+                    if (project.activeLayer !== item.layer) {
+                        item.layer.activate();
+                        uiLayer.bringToFront();
+                        renderLayersUI(); // Forzamos el redibujado para resaltar la nueva capa
+                    }
+
                     panel.classList.remove('hidden');
                     panel.classList.add('flex');
                     noSelMsg.classList.add('hidden');
 
-                    // Check if Text
-                    if (item instanceof PointText) {
-                        textPropGroup.classList.remove('hidden');
-                        textPropGroup.classList.add('flex');
-                        propText.value = item.content;
-                    } else {
-                        textPropGroup.classList.add('hidden');
-                        textPropGroup.classList.remove('flex');
-                    }
+                    // Check Type
+                    textPropGroup.classList.toggle('hidden', !(item instanceof PointText));
+                    textPropGroup.classList.toggle('flex', (item instanceof PointText));
+                    if (item instanceof PointText) propText.value = item.content;
 
-                    if (item.fillColor) {
-                        let hex = getHexColor(item.fillColor);
-                        propFill.value = hex;
-                        fillHex.textContent = hex;
-                        currentFillColor = hex;
-                    } else {
-                        fillHex.textContent = 'NONE';
-                    }
+                    let isRaster = item.className === 'Raster';
 
-                    if (item.strokeColor) {
-                        let hex = getHexColor(item.strokeColor);
-                        propStroke.value = hex;
-                        strokeHex.textContent = hex;
-                        currentStrokeColor = hex;
-                    } else {
-                        strokeHex.textContent = 'NONE';
-                    }
+                    rasterPropGroup.classList.toggle('hidden', !isRaster);
+                    rasterPropGroup.classList.toggle('flex', isRaster);
 
-                    let w = item.strokeWidth || 0;
-                    propStrokeWidth.value = w;
-                    strokeWidthVal.textContent = w + ' px';
+                    scalePropGroup.classList.toggle('hidden', !isRaster);
+                    scalePropGroup.classList.toggle('flex', isRaster);
+
+                    colorPropGroup.classList.toggle('hidden', isRaster);
+                    colorPropGroup.classList.toggle('flex', !isRaster);
+
+                    if (!isRaster) {
+                        if (item.fillColor) {
+                            let hex = getHexColor(item.fillColor);
+                            propFill.value = hex;
+                            fillHex.textContent = hex;
+                            currentFillColor = hex;
+                        } else { fillHex.textContent = 'NONE'; }
+
+                        if (item.strokeColor) {
+                            let hex = getHexColor(item.strokeColor);
+                            propStroke.value = hex;
+                            strokeHex.textContent = hex;
+                            currentStrokeColor = hex;
+                        } else { strokeHex.textContent = 'NONE'; }
+
+                        let w = item.strokeWidth || 0;
+                        propStrokeWidth.value = w;
+                        strokeWidthVal.textContent = w + ' px';
+                    } else {
+                        // Actualizar el valor del slider al seleccionar la imagen
+                        let currentScale = item.scaling.x;
+                        propScale.value = currentScale;
+                        scaleVal.textContent = Math.round(currentScale * 100) + '%';
+                    }
 
                     let o = item.opacity !== undefined ? item.opacity : 1;
                     propOpacity.value = o;
@@ -624,134 +1211,208 @@
                 }
             }
 
-            function applyProperty(property, value) {
-                let selectedItems = project.selectedItems.filter(i => i.layer.name !== 'background');
-                selectedItems.forEach(item => item[property] = value);
+            // Listener para el Slider de Escala
+            propScale.addEventListener('input', (e) => {
+                let scale = parseFloat(e.target.value);
+                scaleVal.textContent = Math.round(scale * 100) + '%';
+
+                project.selectedItems
+                    .filter(i => i.layer.name !== 'background' && i.layer.name !== 'uiLayer')
+                    .forEach(item => {
+                        // Se restaura a la matriz identidad temporalmente y se vuelve a escalar 
+                        // porque scaling en paper.js es multiplicativo sobre el estado actual
+                        let currentScale = item.scaling.x;
+                        let factor = scale / currentScale;
+                        item.scale(factor);
+                    });
+                drawBoundingBox();
                 paper.view.draw();
+            });
+
+            function applyProperty(property, value) {
+                project.selectedItems
+                    .filter(i => i.layer.name !== 'background' && i.layer.name !== 'uiLayer')
+                    .forEach(item => {
+                        item[property] = value;
+                        // Si es un grupo (como una silueta vectorizada), forzar el color a los hijos
+                        if (item.children) {
+                            item.children.forEach(child => child[property] = value);
+                        }
+                    });
+                paper.view.draw();
+                saveState(); // Guardamos el cambio de color en el historial
             }
 
-            propText.addEventListener('input', (e) => {
-                let selectedItems = project.selectedItems.filter(i => i instanceof PointText);
-                selectedItems.forEach(item => item.content = e.target.value);
-                paper.view.draw();
-            });
+            propText.addEventListener('input', (e) => { applyProperty('content', e.target.value); });
+            propFill.addEventListener('input', (e) => { currentFillColor = e.target.value; fillHex.textContent = e.target.value; applyProperty('fillColor', e.target.value); });
+            propStroke.addEventListener('input', (e) => { currentStrokeColor = e.target.value; strokeHex.textContent = e.target.value; applyProperty('strokeColor', e.target.value); });
+            propStrokeWidth.addEventListener('input', (e) => { let val = parseInt(e.target.value); currentStrokeWidth = val; strokeWidthVal.textContent = val + ' px'; applyProperty('strokeWidth', val); });
+            propOpacity.addEventListener('input', (e) => { let val = parseFloat(e.target.value); opacityVal.textContent = Math.round(val * 100) + '%'; applyProperty('opacity', val); });
 
-            propFill.addEventListener('input', (e) => {
-                let val = e.target.value;
-                currentFillColor = val;
-                fillHex.textContent = val;
-                applyProperty('fillColor', val);
-            });
-
-            propStroke.addEventListener('input', (e) => {
-                let val = e.target.value;
-                currentStrokeColor = val;
-                strokeHex.textContent = val;
-                applyProperty('strokeColor', val);
-            });
-
-            propStrokeWidth.addEventListener('input', (e) => {
-                let val = parseInt(e.target.value);
-                currentStrokeWidth = val;
-                strokeWidthVal.textContent = val + ' px';
-                applyProperty('strokeWidth', val);
-            });
-
-            propOpacity.addEventListener('input', (e) => {
-                let val = parseFloat(e.target.value);
-                opacityVal.textContent = Math.round(val * 100) + '%';
-                applyProperty('opacity', val);
-            });
-
-            document.getElementById('btn-no-fill').addEventListener('click', () => {
-                currentFillColor = null;
-                fillHex.textContent = 'NONE';
-                applyProperty('fillColor', null);
-            });
-            document.getElementById('btn-no-stroke').addEventListener('click', () => {
-                currentStrokeColor = null;
-                strokeHex.textContent = 'NONE';
-                applyProperty('strokeColor', null);
-            });
+            document.getElementById('btn-no-fill').addEventListener('click', () => { currentFillColor = null; fillHex.textContent = 'NONE'; applyProperty('fillColor', null); });
+            document.getElementById('btn-no-stroke').addEventListener('click', () => { currentStrokeColor = null; strokeHex.textContent = 'NONE'; applyProperty('strokeColor', null); });
 
             document.getElementById('btn-bring-front').addEventListener('click', () => {
-                project.selectedItems.forEach(item => item.bringToFront());
+                project.selectedItems.forEach(item => {
+                    if (item.layer.name !== 'background' && item.layer.name !== 'uiLayer') item.bringToFront();
+                });
+                uiLayer.bringToFront();
             });
-            
             document.getElementById('btn-send-back').addEventListener('click', () => {
                 project.selectedItems.forEach(item => {
-                    item.sendToBack();
-                    bgRect.sendToBack(); 
+                    if (item.layer.name !== 'background' && item.layer.name !== 'uiLayer') item.sendToBack();
                 });
             });
 
             function deleteSelection() {
-                project.selectedItems.forEach(item => {
-                    if (item.layer.name !== 'background') item.remove();
-                });
+                let items = project.selectedItems.filter(i => i.layer.name !== 'background' && i.layer.name !== 'uiLayer');
+                if (items.length === 0) return;
+
+                items.forEach(item => item.remove());
+
                 updateUISelection();
-                if(currentDrawingPath && currentDrawingPath.removed) currentDrawingPath = null;
+                drawBoundingBox();
+                if (currentDrawingPath && currentDrawingPath.removed) currentDrawingPath = null;
+
+                saveState();
             }
             document.getElementById('btn-delete').addEventListener('click', deleteSelection);
 
-            // Custom Confirm Modal Logic
+            // Clear Modal
             const modalOverlay = document.getElementById('modal-overlay');
-            const modalCancel = document.getElementById('modal-btn-cancel');
-            const modalConfirm = document.getElementById('modal-btn-confirm');
-            
-            document.getElementById('btn-clear').addEventListener('click', () => {
-                modalOverlay.classList.remove('hidden');
-            });
-            
-            modalCancel.addEventListener('click', () => {
-                modalOverlay.classList.add('hidden');
-            });
-            
-            modalConfirm.addEventListener('click', () => {
-                mainLayer.removeChildren();
+            document.getElementById('btn-clear').addEventListener('click', () => modalOverlay.classList.remove('hidden'));
+            document.getElementById('modal-btn-cancel').addEventListener('click', () => modalOverlay.classList.add('hidden'));
+            document.getElementById('modal-btn-confirm').addEventListener('click', () => {
+                project.layers.forEach(l => {
+                    if (l.name !== 'background' && l.name !== 'uiLayer') l.removeChildren();
+                });
                 updateUISelection();
+                drawBoundingBox();
                 paper.view.draw();
                 modalOverlay.classList.add('hidden');
             });
 
-            // Keyboard Shortcuts
-            window.addEventListener('keydown', (e) => {
-                if (e.target.tagName.toLowerCase() === 'input') return; // Ignore if typing
-                
-                if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
-                if (e.key.toLowerCase() === 'v') document.querySelector('[data-tool="select"]').click();
-                if (e.key.toLowerCase() === 'a') document.querySelector('[data-tool="direct"]').click();
-                if (e.key.toLowerCase() === 'p') document.querySelector('[data-tool="pen"]').click();
-                if (e.key.toLowerCase() === 'c' && e.shiftKey) document.querySelector('[data-tool="convert"]').click();
-                if (e.key.toLowerCase() === 't') document.querySelector('[data-tool="text"]').click();
+            document.getElementById('image-upload').addEventListener('change', function (e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // 1. Asegurar que la imagen NO se inserte en la capa de la UI ni en el fondo
+                let targetLayer = project.activeLayer;
+                if (targetLayer.name === 'uiLayer' || targetLayer.name === 'background') {
+                    targetLayer = project.layers.find(l => l.name !== 'background' && l.name !== 'uiLayer') || project.layers['Capa 1'];
+                    targetLayer.activate();
+                }
+
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    // 2. Pasamos el DataURL directamente al Raster, dejando que Paper.js procese la imagen
+                    const raster = new Raster(event.target.result);
+
+                    // 3. Usamos el evento 'load' nativo de Paper.js para asegurar que ya tiene dimensiones (ancho y alto reales)
+                    raster.on('load', function () {
+                        raster.position = bgRect.bounds.center;
+
+                        project.deselectAll();
+                        raster.selected = true;
+
+                        uiLayer.bringToFront(); // Garantiza que los controles de UI queden encima
+                        updateUISelection();
+
+                        // Forzar el cambio a la herramienta de selección
+                        document.querySelector('[data-tool="select"]').click();
+
+                        // Ahora la caja se dibujará correctamente porque la imagen ya tiene dimensiones
+                        drawBoundingBox();
+                        paper.view.draw();
+                    });
+                };
+                reader.readAsDataURL(file);
+                e.target.value = ''; // Resetear el input
             });
-            
-            // Resize Canvas
+
+            const modalVec = document.getElementById('modal-vectorize');
+            document.getElementById('btn-vectorize').addEventListener('click', () => modalVec.classList.remove('hidden'));
+            document.getElementById('vec-cancel').addEventListener('click', () => modalVec.classList.add('hidden'));
+
+            function runVectorization(mode) {
+                modalVec.classList.add('hidden');
+                let selectedRasters = project.selectedItems.filter(i => i.className === 'Raster');
+                if (selectedRasters.length === 0) return;
+                let raster = selectedRasters[0];
+
+                let imgData = raster.getImageData(new Rectangle(0, 0, raster.width, raster.height));
+                let options = mode === 'bw' ? { ltres: 1, qtres: 1, pathomit: 8, colorsampling: 0, numberofcolors: 2 } : 'default';
+
+                try {
+                    let svgString = ImageTracer.imagedataToSVG(imgData, options);
+                    let imported = project.importSVG(svgString, { expandShapes: true, insert: true });
+
+                    imported.bounds.center = raster.bounds.center;
+                    let scaleX = raster.bounds.width / imported.bounds.width;
+                    let scaleY = raster.bounds.height / imported.bounds.height;
+                    imported.scale(scaleX, scaleY);
+
+                    // Si vectorizas en Blanco y Negro, quitamos el fondo blanco basura que suele quedarse atrapado:
+                    if (mode === 'bw' && imported.children) {
+                        let bgPath = imported.children[0];
+                        if (bgPath && bgPath.fillColor && bgPath.fillColor.toCSSString() === 'rgb(255,255,255)') {
+                            bgPath.remove();
+                        }
+                    }
+
+                    raster.remove();
+                    project.deselectAll();
+                    imported.selected = true;
+
+                    uiLayer.bringToFront();
+                    updateUISelection();
+                    drawBoundingBox();
+                    paper.view.draw();
+
+                    saveState(); // Registra la vectorización en Ctrl+Z
+
+                } catch (e) {
+                    console.error("Tracing error:", e);
+                }
+            }
+
+            document.getElementById('vec-color').addEventListener('click', () => runVectorization('color'));
+            document.getElementById('vec-bw').addEventListener('click', () => runVectorization('bw'));
+
+            // Canvas Settings & Export
+            // Canvas Settings & Export
             document.getElementById('btn-resize').addEventListener('click', () => {
                 const w = parseInt(document.getElementById('canvas-width').value);
                 const h = parseInt(document.getElementById('canvas-height').value);
                 if (w > 0 && h > 0) {
-                    paper.view.viewSize = new Size(w, h);
+                    // Modificamos SOLO el rectángulo blanco (Artboard), NO la vista de paper.js
                     bgRect.bounds = new Rectangle(0, 0, w, h);
-                    
-                    document.getElementById('canvas-wrapper').style.width = w + 'px';
-                    document.getElementById('canvas-wrapper').style.height = h + 'px';
-                    
+
+                    // Lo centramos respecto a la vista actual
+                    bgRect.position = paper.view.center;
+
+                    // Se elimina la modificación de 'paper.view.viewSize' y del 'style' del HTML
+                    // para que el paneo infinito no se rompa ni se deforme.
                     paper.view.draw();
                 }
             });
-            document.getElementById('btn-resize').click(); 
 
-            // Export Functions
-            window.exportArt = function(format) {
+
+
+            window.exportArt = function (format) {
                 project.deselectAll();
-                hoverIndicator.visible = false;
+                uiLayer.visible = false;
+                bgRect.shadowColor = null; // Quitar sombra temporalmente para la exportación
                 updateUISelection();
+                drawBoundingBox();
                 paper.view.draw();
 
                 if (format === 'svg') {
-                    let svgData = project.exportSVG({ asString: true });
-                    const blob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
+                    let svgData = project.exportSVG({
+                        asString: true,
+                        bounds: bgRect.bounds // Solo exportar el área del rectangulo blanco
+                    });
+                    const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
                     const url = URL.createObjectURL(blob);
                     let link = document.createElement('a');
                     link.href = url;
@@ -759,16 +1420,172 @@
                     link.click();
                     URL.revokeObjectURL(url);
                 } else {
-                    const canvas = document.getElementById('c');
-                    let dataURL = format === 'jpg' ? canvas.toDataURL('image/jpeg', 1.0) : canvas.toDataURL('image/png');
-                    
+                    // Para exportar JPG/PNG solo del area de trabajo, rasterizamos todo el proyecto
+                    // limitando a los bordes de bgRect
+                    let raster = project.activeLayer.rasterize(72, false); // Rasterizamos la vista completa temporalmente
+                    let cropped = raster.getSubRaster(bgRect.bounds); // Cortamos al tamaño del artboard
+
+                    let dataURL = format === 'jpg' ? cropped.canvas.toDataURL('image/jpeg', 1.0) : cropped.canvas.toDataURL('image/png');
+
+                    raster.remove();
+                    cropped.remove();
+
                     let link = document.createElement('a');
                     link.href = dataURL;
                     link.download = `vector-art.${format}`;
                     link.click();
                 }
+
+                bgRect.shadowColor = 'rgba(0,0,0,0.3)'; // Restaurar sombra
+                uiLayer.visible = true;
+                paper.view.draw();
             };
+
+
+            // --- FASE 2: MENÚ CONTEXTUAL Y CAPAS ---
+            const ctxMenu = document.getElementById('context-menu');
+            const ctxLayersList = document.getElementById('ctx-layers-list');
+            const workspaceEl = document.getElementById('workspace');
+
+            workspaceEl.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                let selectedItems = project.selectedItems.filter(i => i.layer.name !== 'background' && i.layer.name !== 'uiLayer');
+                if (selectedItems.length === 0) return;
+
+                ctxMenu.style.left = e.clientX + 'px';
+                ctxMenu.style.top = e.clientY + 'px';
+                ctxMenu.classList.remove('hidden');
+
+                ctxLayersList.innerHTML = '';
+                project.layers.forEach(l => {
+                    if (l.name === 'background' || l.name === 'uiLayer') return;
+                    let btn = document.createElement('button');
+                    btn.className = 'w-full text-left px-4 py-1.5 hover:bg-gray-700 hover:text-white text-gray-400 text-sm';
+                    btn.textContent = l.name;
+                    btn.onclick = () => {
+                        selectedItems.forEach(item => item.addTo(l));
+                        ctxMenu.classList.add('hidden');
+                        updateUISelection();
+                        drawBoundingBox();
+                        paper.view.draw();
+                    };
+                    ctxLayersList.appendChild(btn);
+                });
+            });
+
+            document.addEventListener('click', (e) => { if (!ctxMenu.contains(e.target)) ctxMenu.classList.add('hidden'); });
+
+            // Soporte Táctil para Menú Contextual (Long Press)
+            let touchTimer;
+            workspaceEl.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    touchTimer = setTimeout(() => {
+                        let ev = new MouseEvent('contextmenu', { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, bubbles: true });
+                        workspaceEl.dispatchEvent(ev);
+                    }, 500);
+                }
+            });
+            workspaceEl.addEventListener('touchmove', () => clearTimeout(touchTimer));
+            workspaceEl.addEventListener('touchend', () => clearTimeout(touchTimer));
+
+            // Agrupar y Desagrupar
+            document.getElementById('ctx-group').addEventListener('click', () => {
+                let items = project.selectedItems.filter(i => i.layer.name !== 'background' && i.layer.name !== 'uiLayer');
+                if (items.length > 1) {
+                    let group = new Group(items);
+                    group.selected = true;
+                    updateUISelection(); drawBoundingBox(); paper.view.draw();
+                }
+                ctxMenu.classList.add('hidden');
+            });
+
+            document.getElementById('ctx-ungroup').addEventListener('click', () => {
+                let items = project.selectedItems.filter(i => i.layer.name !== 'background' && i.layer.name !== 'uiLayer');
+                items.forEach(item => {
+                    if (item instanceof Group) {
+                        let children = item.children.slice();
+                        children.forEach(c => { c.insertAbove(item); c.selected = true; });
+                        item.remove();
+                    }
+                });
+                ctxMenu.classList.add('hidden');
+                updateUISelection(); drawBoundingBox(); paper.view.draw();
+            });
+
+            // Atajos de teclado para Agrupar (Ctrl+G) y Desagrupar (Ctrl+Shift+G)
+            window.addEventListener('keydown', (e) => {
+                if (e.ctrlKey || e.metaKey) {
+                    if (e.key.toLowerCase() === 'g') {
+                        e.preventDefault();
+                        if (e.shiftKey) document.getElementById('ctx-ungroup').click();
+                        else document.getElementById('ctx-group').click();
+                    }
+                }
+            });
+
+            // --- FASE 3: LÓGICA DE BUSCATRAZOS ---
+            function applyPathfinder(operation) {
+                let items = project.selectedItems.filter(i => i.layer.name !== 'background' && i.layer.name !== 'uiLayer');
+                if (items.length < 2) return;
+
+                // Función para rascar el color incluso si está dentro de un grupo vectorizado
+                function getColorFrom(item) {
+                    if (item.fillColor) return item.fillColor;
+                    if (item.children && item.children.length > 0) return getColorFrom(item.children[0]);
+                    return null;
+                }
+
+                let topItem = items.reduce((a, b) => a.isAbove(b) ? a : b);
+                let topFill = getColorFrom(topItem); // Guardamos el color real superior
+
+                let sorted = items.sort((a, b) => a.isAbove(b) ? 1 : -1);
+                let result = sorted[0];
+
+                for (let i = 1; i < sorted.length; i++) {
+                    let next = sorted[i];
+                    let newResult = null;
+
+                    try {
+                        if (operation === 'unite') newResult = result.unite(next);
+                        else if (operation === 'subtract') newResult = result.subtract(next);
+                        else if (operation === 'intersect') newResult = result.intersect(next);
+                        else if (operation === 'exclude') newResult = result.exclude(next);
+                    } catch (e) { }
+
+                    if (newResult) {
+                        result.remove();
+                        next.remove();
+                        result = newResult;
+                    }
+                }
+
+                if (result) {
+                    if (topFill) {
+                        result.fillColor = topFill;
+                        if (result.children) result.children.forEach(c => c.fillColor = topFill);
+                    }
+                    result.bringToFront();
+                }
+
+                project.deselectAll();
+                if (result) result.selected = true;
+
+                updateUISelection();
+                drawBoundingBox();
+                paper.view.draw();
+                saveState(); // Guardamos en historial
+            }
+
+            document.getElementById('pf-unite').addEventListener('click', () => applyPathfinder('unite'));
+            document.getElementById('pf-subtract').addEventListener('click', () => applyPathfinder('subtract'));
+            document.getElementById('pf-intersect').addEventListener('click', () => applyPathfinder('intersect'));
+            document.getElementById('pf-exclude').addEventListener('click', () => applyPathfinder('exclude'));
+
+
+            // Init Panels
+            renderLayersUI();
         };
     </script>
 </body>
+
 </html>
