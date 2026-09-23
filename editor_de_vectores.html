@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Vector Editor (Paper.js)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Paper.js for robust vector graphics math and rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Tailwind gray-900 */
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+        
+        #workspace {
+            background-color: #9ca3af; /* Darker gray workspace */
+            /* Illustrator-like workspace grid */
+            background-image: 
+                linear-gradient(#6b7280 1px, transparent 1px),
+                linear-gradient(90deg, #6b7280 1px, transparent 1px);
+            background-size: 20px 20px;
+            background-position: center center;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .canvas-container {
+            margin: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            background-color: white; /* Actual canvas area */
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* Tool buttons */
+        .tool-btn {
+            transition: all 0.15s ease;
+        }
+        .tool-btn.active {
+            background-color: #3b82f6;
+            color: white;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        /* Custom color inputs */
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            cursor: pointer;
+            padding: 0;
+            background: transparent;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 1px solid #4b5563; border-radius: 4px; }
+        
+        .transparent-btn {
+            width: 28px; height: 28px;
+            background: linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc),
+                        linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc);
+            background-size: 10px 10px;
+            background-position: 0 0, 5px 5px;
+            border: 1px solid #4b5563;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="text-gray-200 flex flex-col h-screen">
+
+    <!-- Top Navbar -->
+    <header class="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 shrink-0 z-10 shadow-md">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-bezier-curve text-blue-400 text-xl"></i>
+            <h1 class="font-bold text-lg tracking-wide">VectorEditor <span class="text-xs font-normal text-gray-400">Pro</span></h1>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <!-- Canvas Settings -->
+            <div class="flex items-center gap-2 bg-gray-900 px-3 py-1.5 rounded-md text-sm border border-gray-700">
+                <label class="text-gray-400">W:</label>
+                <input type="number" id="canvas-width" value="800" class="w-16 bg-transparent text-white border-none outline-none focus:ring-1 focus:ring-blue-500 text-right">
+                <label class="text-gray-400 ml-2">H:</label>
+                <input type="number" id="canvas-height" value="600" class="w-16 bg-transparent text-white border-none outline-none focus:ring-1 focus:ring-blue-500 text-right">
+                <button id="btn-resize" class="ml-2 bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded transition text-xs font-bold">Apply</button>
+            </div>
+
+            <!-- Export -->
+            <div class="flex items-center gap-2 border-l border-gray-700 pl-4">
+                <button onclick="exportArt('svg')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 text-orange-400">
+                    <i class="fa-solid fa-file-code"></i> SVG
+                </button>
+                <button onclick="exportArt('png')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 text-green-400">
+                    <i class="fa-solid fa-image"></i> PNG
+                </button>
+                <button onclick="exportArt('jpg')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 text-blue-400">
+                    <i class="fa-solid fa-file-image"></i> JPG
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        
+        <!-- Left Toolbar (Tools) -->
+        <aside class="w-16 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-4 gap-2 shrink-0 z-10">
+            <button class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-400" data-tool="select" title="Selection Tool (V) - Move whole objects">
+                <i class="fa-solid fa-arrow-pointer"></i>
+            </button>
+            <button class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-white drop-shadow-md" data-tool="direct" title="Direct Selection Tool (A) - Edit nodes and handles">
+                <!-- Simulation of "White Arrow" using CSS styling -->
+                <i class="fa-solid fa-arrow-pointer" style="transform: scaleX(-1); -webkit-text-stroke: 1px #9ca3af;"></i>
+            </button>
+            <button class="tool-btn active w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-300" data-tool="pen" title="Pen Tool (P) - Draw Bézier curves">
+                <i class="fa-solid fa-pen-nib"></i>
+            </button>
+            <button class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-300" data-tool="text" title="Text Tool (T)">
+                <i class="fa-solid fa-t"></i>
+            </button>
+            
+            <div class="w-8 h-px bg-gray-700 my-2"></div>
+            
+            <button id="btn-delete" class="w-10 h-10 rounded-lg hover:bg-red-900/50 text-red-400 flex items-center justify-center transition" title="Delete Selected (Del)">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+            
+            <div class="flex-1"></div>
+            
+            <button id="btn-clear" class="w-10 h-10 rounded-lg bg-gray-900 hover:bg-red-600 text-gray-400 hover:text-white flex items-center justify-center transition" title="Clear Canvas">
+                <i class="fa-solid fa-burst"></i>
+            </button>
+        </aside>
+
+        <!-- Workspace (Canvas area) -->
+        <main id="workspace" class="flex-1 relative">
+            <div class="canvas-container" id="canvas-wrapper">
+                <canvas id="c" width="800" height="600"></canvas>
+            </div>
+        </main>
+
+        <!-- Right Sidebar (Properties) -->
+        <aside class="w-64 bg-gray-800 border-l border-gray-700 p-5 shrink-0 overflow-y-auto z-10 flex flex-col gap-6">
+            
+            <div>
+                <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-700 pb-2">Appearance</h2>
+                <div id="no-selection-msg" class="text-sm text-gray-500 italic">No path selected.</div>
+                
+                <div id="properties-panel" class="hidden flex-col gap-5">
+                    
+                    <!-- Colors -->
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm text-gray-300">Fill</label>
+                        <div class="flex items-center gap-2">
+                            <button id="btn-no-fill" class="transparent-btn" title="Remove Fill"></button>
+                            <span id="fill-hex" class="text-xs text-gray-400 uppercase font-mono w-14">NONE</span>
+                            <input type="color" id="prop-fill" value="#000000">
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm text-gray-300">Stroke</label>
+                        <div class="flex items-center gap-2">
+                            <button id="btn-no-stroke" class="transparent-btn" title="Remove Stroke"></button>
+                            <span id="stroke-hex" class="text-xs text-gray-400 uppercase font-mono w-14">#000000</span>
+                            <input type="color" id="prop-stroke" value="#000000">
+                        </div>
+                    </div>
+
+                    <!-- Stroke Width -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-sm text-gray-300">Stroke Width</label>
+                            <span id="stroke-width-val" class="text-xs font-mono bg-gray-900 px-2 py-1 rounded text-gray-300">2 px</span>
+                        </div>
+                        <input type="range" id="prop-stroke-width" min="0" max="50" value="2" class="w-full accent-blue-500">
+                    </div>
+
+                    <!-- Opacity -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-sm text-gray-300">Opacity</label>
+                            <span id="opacity-val" class="text-xs font-mono bg-gray-900 px-2 py-1 rounded text-gray-300">100%</span>
+                        </div>
+                        <input type="range" id="prop-opacity" min="0" max="1" step="0.01" value="1" class="w-full accent-blue-500">
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="grid grid-cols-2 gap-2 mt-2">
+                        <button id="btn-bring-front" class="bg-gray-700 hover:bg-gray-600 py-2 rounded text-xs font-semibold text-gray-300 transition">
+                            Bring Front
+                        </button>
+                        <button id="btn-send-back" class="bg-gray-700 hover:bg-gray-600 py-2 rounded text-xs font-semibold text-gray-300 transition">
+                            Send Back
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-auto">
+                <div class="bg-gray-900 p-3 rounded-lg border border-gray-700 text-xs text-gray-400 space-y-2">
+                    <p><strong class="text-gray-300">Pen Tool:</strong> Click to add sharp nodes. Drag to create bezier curves. Click start node to close path.</p>
+                    <p><strong class="text-gray-300">Direct Selection:</strong> Select shapes. Drag nodes to move them. Drag handles to adjust curves.</p>
+                </div>
+            </div>
+
+        </aside>
+    </div>
+
+    <script>
+        // Install Paper.js in the global scope
+        paper.install(window);
+
+        window.onload = function() {
+            // Setup canvas
+            paper.setup('c');
+            
+            // Background setup for exports (Locked white rectangle)
+            let bgLayer = new Layer();
+            bgLayer.name = 'background';
+            let bgRect = new Path.Rectangle(new Point(0, 0), paper.view.viewSize);
+            bgRect.fillColor = 'white';
+            bgLayer.locked = true; // Prevent selection/interaction
+            
+            // Main drawing layer
+            let mainLayer = new Layer();
+            mainLayer.name = 'main';
+            mainLayer.activate();
+
+            // Default Styles
+            let currentFillColor = null; // null = transparent
+            let currentStrokeColor = '#3b82f6';
+            let currentStrokeWidth = 2;
+
+            // Hover Indicator for Pen Tool Interactions
+            let hoverIndicator = new Path.Circle({
+                center: [0, 0],
+                radius: 6,
+                strokeColor: '#3b82f6',
+                strokeWidth: 2,
+                visible: false
+            });
+            hoverIndicator.locked = true; // Prevent interaction with the indicator
+
+            // Tools definition
+            let activeTool = 'pen';
+            let currentDrawingPath = null;
+            let hoverState = null; // 'close', 'resume', or null
+            let resumePath = null;
+            
+            // --- TOOL EXECUTIONS ---
+            
+            // 1. PEN TOOL (Bézier Drawing)
+            let penTool = new Tool();
+            
+            penTool.onMouseMove = function(event) {
+                hoverState = null;
+                hoverIndicator.visible = false;
+                resumePath = null;
+                paper.view.element.style.cursor = 'crosshair';
+                
+                if (currentDrawingPath && currentDrawingPath.segments.length > 1) {
+                    // Check if hovering near the start point to CLOSE path
+                    let firstSegment = currentDrawingPath.firstSegment;
+                    if (event.point.getDistance(firstSegment.point) < 10) {
+                        hoverState = 'close';
+                        hoverIndicator.position = firstSegment.point;
+                        hoverIndicator.visible = true;
+                        paper.view.element.style.cursor = 'pointer';
+                    }
+                } else if (!currentDrawingPath) {
+                    // Check if hovering near an open path's endpoints to RESUME drawing
+                    let hit = project.hitTest(event.point, { ends: true, tolerance: 10 });
+                    if (hit && hit.item && hit.item.layer.name !== 'background' && !hit.item.closed) {
+                        hoverState = 'resume';
+                        hoverIndicator.position = hit.segment.point;
+                        hoverIndicator.visible = true;
+                        resumePath = hit.item;
+                        
+                        // If we hit the first segment, reverse the path so we append correctly to the end
+                        if (hit.segment === hit.item.firstSegment) {
+                            hit.item.reverse();
+                        }
+                        paper.view.element.style.cursor = 'copy';
+                    }
+                }
+            };
+
+            penTool.onMouseDown = function(event) {
+                if (hoverState === 'close' && currentDrawingPath) {
+                    // Close the path
+                    currentDrawingPath.closed = true;
+                    currentDrawingPath.fillColor = currentFillColor; // Apply fill only when closed
+                    currentDrawingPath.selected = false;
+                    currentDrawingPath = null;
+                    hoverIndicator.visible = false;
+                    updateUISelection();
+                    return;
+                }
+                
+                if (hoverState === 'resume' && resumePath) {
+                    // Resume an open path
+                    project.deselectAll();
+                    currentDrawingPath = resumePath;
+                    currentDrawingPath.selected = true;
+                    hoverIndicator.visible = false;
+                    return; // Prevent adding an extra segment exactly on the click
+                }
+
+                if (!currentDrawingPath) {
+                    // Start new path
+                    project.deselectAll();
+                    currentDrawingPath = new Path();
+                    currentDrawingPath.strokeColor = currentStrokeColor !== 'none' ? currentStrokeColor : '#000000';
+                    currentDrawingPath.strokeWidth = currentStrokeWidth;
+                    currentDrawingPath.selected = true; // Shows nodes
+                }
+                
+                // Add the new straight point
+                currentDrawingPath.add(event.point);
+            };
+            
+            penTool.onMouseDrag = function(event) {
+                if (currentDrawingPath) {
+                    // Symmetrical handle adjustment: Click and drag to create bezier handles (Illustrator style)
+                    let lastSegment = currentDrawingPath.lastSegment;
+                    // The handleOut goes in the direction of the drag
+                    lastSegment.handleOut = event.point.subtract(lastSegment.point);
+                    // The handleIn goes in the opposite direction
+                    lastSegment.handleIn = lastSegment.handleOut.multiply(-1);
+                }
+            };
+
+            // 2. SELECTION TOOL (Black Arrow - Object Selection)
+            let selectTool = new Tool();
+            let hitPath = null;
+            
+            selectTool.onMouseDown = function(event) {
+                hitPath = null;
+                
+                // Hit test just for fills and strokes (ignoring nodes)
+                let hitResult = project.hitTest(event.point, { fill: true, stroke: true, tolerance: 5 });
+                
+                if (!hitResult) {
+                    project.deselectAll();
+                    updateUISelection();
+                    return;
+                }
+
+                if (hitResult.item && hitResult.item.layer.name !== 'background') {
+                    hitPath = hitResult.item;
+                    
+                    if (!event.modifiers.shift) {
+                        project.deselectAll();
+                    }
+                    hitPath.selected = true;
+                    // Remove individual segment selections so handles don't show
+                    hitPath.segments.forEach(seg => seg.selected = false); 
+                    
+                    updateUISelection();
+                }
+            };
+
+            selectTool.onMouseDrag = function(event) {
+                if (hitPath) {
+                    // Move entire path
+                    hitPath.position = hitPath.position.add(event.delta);
+                }
+            };
+
+            // 3. DIRECT SELECTION TOOL (White Arrow - Node & Handle Editing)
+            let directSelectTool = new Tool();
+            let dsHitSegment = null, dsHitPath = null, dsHitHandle = null;
+
+            directSelectTool.onMouseDown = function(event) {
+                dsHitSegment = dsHitPath = dsHitHandle = null;
+                
+                // Hit test allowing segments (nodes) and handles
+                let hitResult = project.hitTest(event.point, {
+                    segments: true,
+                    handles: true,
+                    stroke: true,
+                    fill: true,
+                    tolerance: 8
+                });
+                
+                if (!hitResult) {
+                    project.deselectAll();
+                    updateUISelection();
+                    return;
+                }
+
+                if (hitResult.item && hitResult.item.layer.name !== 'background') {
+                    dsHitPath = hitResult.item;
+                    
+                    if (hitResult.type === 'fill' || hitResult.type === 'stroke') {
+                        // Clicked the line, reveal nodes
+                        project.deselectAll();
+                        dsHitPath.selected = true;
+                    } 
+                    else {
+                        // Clicked a specific node or handle
+                        if (!dsHitPath.selected) {
+                            project.deselectAll();
+                            dsHitPath.selected = true;
+                        }
+                        
+                        if (hitResult.type === 'segment') {
+                            // By selecting the specific segment, Paper.js natively reveals its Bézier handles!
+                            dsHitPath.segments.forEach(seg => seg.selected = false);
+                            hitResult.segment.selected = true;
+                            dsHitSegment = hitResult.segment;
+                        } else if (hitResult.type === 'handle-in') {
+                            dsHitHandle = 'handleIn';
+                            dsHitSegment = hitResult.segment;
+                        } else if (hitResult.type === 'handle-out') {
+                            dsHitHandle = 'handleOut';
+                            dsHitSegment = hitResult.segment;
+                        }
+                    }
+                    updateUISelection();
+                }
+            };
+
+            directSelectTool.onMouseDrag = function(event) {
+                if (dsHitSegment && dsHitHandle) {
+                    // Stretching / Adjusting a bezier handle
+                    dsHitSegment[dsHitHandle] = dsHitSegment[dsHitHandle].add(event.delta);
+                } else if (dsHitSegment) {
+                    // Moving a specific vertex/node
+                    dsHitSegment.point = dsHitSegment.point.add(event.delta);
+                }
+            };
+
+            // 4. TEXT TOOL
+            let textTool = new Tool();
+            textTool.onMouseDown = function(event) {
+                let textContent = prompt("Enter text:", "Vector Text");
+                if (textContent) {
+                    project.deselectAll();
+                    let text = new PointText(event.point);
+                    text.content = textContent;
+                    text.fillColor = currentFillColor || '#000000'; // Text needs color
+                    text.strokeColor = currentStrokeColor !== 'none' ? currentStrokeColor : null;
+                    text.strokeWidth = currentStrokeWidth;
+                    text.fontSize = 32;
+                    text.fontFamily = 'Inter';
+                    text.selected = true;
+                    updateUISelection();
+                    
+                    // Switch back to select tool automatically
+                    document.querySelector('[data-tool="select"]').click();
+                }
+            };
+
+            
+            // Tool Switching Logic
+            const toolBtns = document.querySelectorAll('.tool-btn');
+            toolBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    toolBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    activeTool = btn.dataset.tool;
+                    
+                    // Cleanup visual aids when switching tools
+                    hoverIndicator.visible = false;
+                    paper.view.element.style.cursor = 'default';
+                    
+                    // Cancel any current drawing path if switching away from pen
+                    if(activeTool !== 'pen' && currentDrawingPath) {
+                        if(currentDrawingPath.segments.length < 2) currentDrawingPath.remove();
+                        currentDrawingPath.selected = false;
+                        currentDrawingPath = null;
+                    }
+                    
+                    // Activate corresponding Paper.js tool
+                    if(activeTool === 'pen') penTool.activate();
+                    else if(activeTool === 'select') selectTool.activate();
+                    else if(activeTool === 'direct') directSelectTool.activate();
+                    else if(activeTool === 'text') textTool.activate();
+                });
+            });
+
+            // Set default tool
+            penTool.activate();
+
+            // Properties Panel UI Sync
+            const panel = document.getElementById('properties-panel');
+            const noSelMsg = document.getElementById('no-selection-msg');
+            const propFill = document.getElementById('prop-fill');
+            const fillHex = document.getElementById('fill-hex');
+            const propStroke = document.getElementById('prop-stroke');
+            const strokeHex = document.getElementById('stroke-hex');
+            const propStrokeWidth = document.getElementById('prop-stroke-width');
+            const strokeWidthVal = document.getElementById('stroke-width-val');
+            const propOpacity = document.getElementById('prop-opacity');
+            const opacityVal = document.getElementById('opacity-val');
+
+            function rgbToHex(r, g, b) {
+                return "#" + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1);
+            }
+
+            // Map paper.js colors to hex for input
+            function getHexColor(paperColor) {
+                if(!paperColor) return null;
+                return rgbToHex(Math.round(paperColor.red*255), Math.round(paperColor.green*255), Math.round(paperColor.blue*255));
+            }
+
+            function updateUISelection() {
+                // Get selected items (excluding background layer items)
+                let selectedItems = project.selectedItems.filter(item => item.layer.name !== 'background');
+                
+                if (selectedItems.length > 0) {
+                    let item = selectedItems[0];
+                    panel.classList.remove('hidden');
+                    panel.classList.add('flex');
+                    noSelMsg.classList.add('hidden');
+
+                    // Fill Color
+                    if (item.fillColor) {
+                        let hex = getHexColor(item.fillColor);
+                        propFill.value = hex;
+                        fillHex.textContent = hex;
+                        currentFillColor = hex;
+                    } else {
+                        fillHex.textContent = 'NONE';
+                    }
+
+                    // Stroke Color
+                    if (item.strokeColor) {
+                        let hex = getHexColor(item.strokeColor);
+                        propStroke.value = hex;
+                        strokeHex.textContent = hex;
+                        currentStrokeColor = hex;
+                    } else {
+                        strokeHex.textContent = 'NONE';
+                    }
+
+                    // Stroke Width
+                    let w = item.strokeWidth || 0;
+                    propStrokeWidth.value = w;
+                    strokeWidthVal.textContent = w + ' px';
+
+                    // Opacity
+                    let o = item.opacity !== undefined ? item.opacity : 1;
+                    propOpacity.value = o;
+                    opacityVal.textContent = Math.round(o * 100) + '%';
+                } else {
+                    panel.classList.add('hidden');
+                    panel.classList.remove('flex');
+                    noSelMsg.classList.remove('hidden');
+                }
+            }
+
+            // Apply Properties to Selected Items
+            function applyProperty(property, value) {
+                let selectedItems = project.selectedItems;
+                selectedItems.forEach(item => {
+                    item[property] = value;
+                });
+                paper.view.draw();
+            }
+
+            propFill.addEventListener('input', (e) => {
+                let val = e.target.value;
+                currentFillColor = val;
+                fillHex.textContent = val;
+                applyProperty('fillColor', val);
+            });
+
+            propStroke.addEventListener('input', (e) => {
+                let val = e.target.value;
+                currentStrokeColor = val;
+                strokeHex.textContent = val;
+                applyProperty('strokeColor', val);
+            });
+
+            propStrokeWidth.addEventListener('input', (e) => {
+                let val = parseInt(e.target.value);
+                currentStrokeWidth = val;
+                strokeWidthVal.textContent = val + ' px';
+                applyProperty('strokeWidth', val);
+            });
+
+            propOpacity.addEventListener('input', (e) => {
+                let val = parseFloat(e.target.value);
+                opacityVal.textContent = Math.round(val * 100) + '%';
+                applyProperty('opacity', val);
+            });
+
+            // Transparent Buttons
+            document.getElementById('btn-no-fill').addEventListener('click', () => {
+                currentFillColor = null;
+                fillHex.textContent = 'NONE';
+                applyProperty('fillColor', null);
+            });
+            document.getElementById('btn-no-stroke').addEventListener('click', () => {
+                currentStrokeColor = null;
+                strokeHex.textContent = 'NONE';
+                applyProperty('strokeColor', null);
+            });
+
+            // Layering
+            document.getElementById('btn-bring-front').addEventListener('click', () => {
+                project.selectedItems.forEach(item => item.bringToFront());
+            });
+            
+            document.getElementById('btn-send-back').addEventListener('click', () => {
+                project.selectedItems.forEach(item => {
+                    item.sendToBack();
+                    // Must bring above background layer!
+                    bgRect.sendToBack(); 
+                });
+            });
+
+            // Deletion
+            function deleteSelection() {
+                project.selectedItems.forEach(item => item.remove());
+                updateUISelection();
+                if(currentDrawingPath && currentDrawingPath.removed) currentDrawingPath = null;
+            }
+            document.getElementById('btn-delete').addEventListener('click', deleteSelection);
+
+            // Clear All
+            document.getElementById('btn-clear').addEventListener('click', () => {
+                if(confirm('Clear the entire vector canvas?')) {
+                    mainLayer.removeChildren();
+                    updateUISelection();
+                    paper.view.draw();
+                }
+            });
+
+            // Keyboard Shortcuts
+            window.addEventListener('keydown', (e) => {
+                if (e.target.tagName.toLowerCase() === 'input') return;
+                
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    deleteSelection();
+                }
+                if (e.key.toLowerCase() === 'v') document.querySelector('[data-tool="select"]').click();
+                if (e.key.toLowerCase() === 'a') document.querySelector('[data-tool="direct"]').click();
+                if (e.key.toLowerCase() === 'p') document.querySelector('[data-tool="pen"]').click();
+                if (e.key.toLowerCase() === 't') document.querySelector('[data-tool="text"]').click();
+            });
+
+            
+            // Resize Canvas
+            document.getElementById('btn-resize').addEventListener('click', () => {
+                const w = parseInt(document.getElementById('canvas-width').value);
+                const h = parseInt(document.getElementById('canvas-height').value);
+                if (w > 0 && h > 0) {
+                    paper.view.viewSize = new Size(w, h);
+                    bgRect.bounds = new Rectangle(0, 0, w, h);
+                    
+                    // Adjust DOM canvas container to match
+                    document.getElementById('canvas-wrapper').style.width = w + 'px';
+                    document.getElementById('canvas-wrapper').style.height = h + 'px';
+                    
+                    paper.view.draw();
+                }
+            });
+            // Initial trigger to set DOM wrapper size
+            document.getElementById('btn-resize').click(); 
+
+            // Export Functions
+            window.exportArt = function(format) {
+                // Deselect everything first so handles/bounding boxes don't render in export
+                project.deselectAll();
+                hoverIndicator.visible = false; // Hide pen indicator
+                updateUISelection();
+                paper.view.draw();
+
+                if (format === 'svg') {
+                    // Export SVG string
+                    let svgData = project.exportSVG({ asString: true });
+                    const blob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
+                    const url = URL.createObjectURL(blob);
+                    let link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'vector-art.svg';
+                    link.click();
+                    URL.revokeObjectURL(url);
+                } else if (format === 'png' || format === 'jpg') {
+                    // For PNG/JPG, pull directly from HTML5 canvas data url
+                    const canvas = document.getElementById('c');
+                    let dataURL;
+                    if (format === 'jpg') {
+                        dataURL = canvas.toDataURL('image/jpeg', 1.0); // background is already white
+                    } else {
+                        // For transparent PNG, we'd normally hide background. 
+                        // Since requested white background on workspace, we leave bgRect visible.
+                        // If true transparency desired in PNG, set bgRect.visible = false before export.
+                        dataURL = canvas.toDataURL('image/png');
+                    }
+                    
+                    let link = document.createElement('a');
+                    link.href = dataURL;
+                    link.download = `vector-art.${format}`;
+                    link.click();
+                }
+            };
+        };
+    </script>
+</body>
+</html>

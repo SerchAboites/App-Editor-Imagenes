@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Herramienta de Edición y Recorte de Imágenes</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Cropper.js CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" rel="stylesheet">
+    
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+
+        /* Transparencia (Checkerboard pattern) exclusiva para el fondo de la imagen */
+        .bg-checkerboard, .cropper-canvas, .cropper-view-box {
+            background-color: #f0f0f0 !important;
+            background-image: 
+                linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc),
+                linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc) !important;
+            background-size: 20px 20px !important;
+            background-position: 0 0, 10px 10px !important;
+        }
+
+        /* Evitar que el fondo por defecto de cropper interfiera con el workspace oscuro */
+        .cropper-bg {
+            background-image: none !important;
+            background-color: transparent !important;
+        }
+
+        /* Limitar el tamaño máximo de la imagen para que Cropper escale visualmente */
+        .img-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        img {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        /* Estilizar el input range del removedor de fondo */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #4f46e5;
+            cursor: pointer;
+            margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #d1d5db;
+            border-radius: 2px;
+        }
+
+        /* =========================================
+           SOBREESCRITURA DE ESTILOS CROPPER.JS 
+           Líneas gruesas, visibles y azul neón
+           ========================================= */
+        
+        /* Borde exterior del área de recorte */
+        .cropper-view-box {
+            outline: 3px solid #00f3ff !important; 
+            outline-color: rgba(0, 243, 255, 0.9) !important;
+        }
+
+        /* Líneas punteadas (Regla de tercios) más visibles */
+        .cropper-dashed {
+            border: 0 dashed #00f3ff !important;
+            opacity: 0.9 !important;
+        }
+        .cropper-dashed.dashed-h {
+            border-top-width: 2px !important;
+            border-bottom-width: 2px !important;
+        }
+        .cropper-dashed.dashed-v {
+            border-left-width: 2px !important;
+            border-right-width: 2px !important;
+        }
+
+        /* Líneas guía sólidas y la cruz central */
+        .cropper-line {
+            background-color: #00f3ff !important;
+            opacity: 0.8 !important;
+        }
+        .cropper-center::before, .cropper-center::after {
+            background-color: #00f3ff !important;
+        }
+
+        /* Puntos de agarre (esquinas y bordes) */
+        .cropper-point {
+            background-color: #00f3ff !important;
+            width: 12px !important;
+            height: 12px !important;
+            opacity: 1 !important;
+        }
+        .cropper-point.point-e, .cropper-point.point-n, 
+        .cropper-point.point-w, .cropper-point.point-s {
+            width: 8px !important;
+            height: 8px !important;
+        }
+
+        /* Modo de recorte circular */
+        .is-circular-mode .cropper-view-box,
+        .is-circular-mode .cropper-face {
+            border-radius: 50% !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen overflow-hidden flex flex-col md:flex-row">
+
+    <!-- Panel Lateral de Herramientas -->
+    <aside class="w-full md:w-80 bg-white shadow-xl flex flex-col h-auto md:h-full z-20 overflow-y-auto">
+        <div class="p-4 bg-indigo-600 text-white flex items-center justify-between shrink-0 shadow-md">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-wand-magic-sparkles text-xl"></i>
+                <h1 class="text-lg font-bold">ImageStudio</h1>
+            </div>
+            <!-- Controles de Historial (Deshacer/Rehacer) -->
+            <div class="flex gap-1">
+                <button id="btn-undo" class="p-2 bg-indigo-500 hover:bg-indigo-400 rounded transition opacity-50 cursor-not-allowed" disabled title="Deshacer">
+                    <i class="fa-solid fa-rotate-left"></i>
+                </button>
+                <button id="btn-redo" class="p-2 bg-indigo-500 hover:bg-indigo-400 rounded transition opacity-50 cursor-not-allowed" disabled title="Rehacer">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="p-5 flex flex-col gap-5 flex-grow">
+            
+            <!-- 1. Carga de Imágenes -->
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">1. Subir Imagen</label>
+                <label class="flex flex-col items-center justify-center w-full h-20 border-2 border-indigo-300 border-dashed rounded-lg cursor-pointer bg-indigo-50 hover:bg-indigo-100 transition">
+                    <div class="flex flex-col items-center justify-center pt-4 pb-4">
+                        <i class="fa-solid fa-cloud-arrow-up text-xl text-indigo-500 mb-1"></i>
+                        <p class="text-xs text-gray-500 font-medium">Click para seleccionar</p>
+                    </div>
+                    <input id="image-upload" type="file" class="hidden" accept="image/png, image/jpeg, image/webp" />
+                </label>
+            </div>
+
+            <div id="tools-section" class="opacity-50 pointer-events-none transition-opacity duration-300 flex flex-col gap-5">
+                
+                <!-- 2. Herramientas de Recorte -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">2. Recorte</label>
+                    <div class="flex gap-2 mb-2">
+                        <button id="btn-ratio-free" class="flex-1 py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition border-2 border-transparent">
+                            <i class="fa-solid fa-crop-simple mr-1"></i> Libre
+                        </button>
+                        <button id="btn-ratio-square" class="flex-1 py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition border-2 border-transparent">
+                            <i class="fa-regular fa-square mr-1"></i> 1:1
+                        </button>
+                        <button id="btn-ratio-circle" class="flex-1 py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition border-2 border-transparent">
+                            <i class="fa-regular fa-circle mr-1"></i> Círculo
+                        </button>
+                    </div>
+                    
+                    <button id="btn-apply-crop" class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition shadow-md flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-check"></i> Aplicar Recorte
+                    </button>
+                </div>
+
+                <!-- 3. Resolución Manual -->
+                <div class="border-t border-gray-200 pt-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">3. Resolución (Píxeles)</label>
+                    <div class="flex gap-2 mb-2">
+                        <div class="flex-1">
+                            <label class="text-xs text-gray-500">Ancho</label>
+                            <input type="number" id="input-width" class="w-full px-2 py-1 border border-gray-300 rounded text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        </div>
+                        <div class="flex-1">
+                            <label class="text-xs text-gray-500">Alto</label>
+                            <input type="number" id="input-height" class="w-full px-2 py-1 border border-gray-300 rounded text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        </div>
+                    </div>
+                    <button id="btn-apply-resolution" class="w-full py-2 px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-sm font-medium transition shadow-md flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-expand"></i> Escalar Canvas
+                    </button>
+                </div>
+
+                <!-- 4. Removedor de Fondo -->
+                <div class="border-t border-gray-200 pt-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">4. Quitar Fondo (Color esquina)</label>
+                    
+                    <div class="mb-2 mt-2">
+                        <div class="flex justify-between text-xs text-gray-600 mb-1">
+                            <span>Tolerancia:</span>
+                            <span id="tolerance-val">30</span>
+                        </div>
+                        <input type="range" id="tolerance-slider" min="0" max="150" value="30">
+                    </div>
+
+                    <button id="btn-remove-bg" class="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium transition shadow-md flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-eraser"></i> Ejecutar Mágia
+                    </button>
+                </div>
+
+                <!-- 5. Exportar -->
+                <div class="border-t border-gray-200 pt-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">5. Exportar Final</label>
+                    <div class="flex gap-2">
+                        <button id="btn-export-png" class="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium transition shadow-md flex justify-center items-center gap-2">
+                            <i class="fa-solid fa-download"></i> PNG
+                        </button>
+                        <button id="btn-export-jpg" class="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-sm font-medium transition shadow-md flex justify-center items-center gap-2">
+                            <i class="fa-solid fa-file-image"></i> JPG
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </aside>
+
+    <!-- Área de Trabajo Principal (Fondo gris oscuro) -->
+    <main class="flex-1 flex flex-col relative h-[50vh] md:h-full bg-gray-800 shadow-inner overflow-hidden">
+        
+        <!-- Estado Vacío -->
+        <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 p-4 text-center z-0">
+            <i class="fa-regular fa-image text-6xl mb-4 text-gray-500"></i>
+            <h2 class="text-2xl font-semibold mb-2 text-gray-300">Lienzo Vacío</h2>
+            <p>Sube una imagen para comenzar a editar.</p>
+        </div>
+
+        <!-- Contenedor donde operará Cropper (ocupa todo el espacio disponible) -->
+        <div id="workspace-container" class="w-full h-full p-4 md:p-10 flex items-center justify-center hidden opacity-0 transition-opacity duration-500 z-10 box-border">
+            <div class="img-container">
+                <!-- La imagen recibe el checkerboard internamente por CSS al volverse cropper-canvas -->
+                <img id="image-workspace" src="" alt="Workspace">
+            </div>
+        </div>
+        
+        <!-- Canvas oculto para procesamientos y redimensionado -->
+        <canvas id="processing-canvas" class="hidden"></canvas>
+    </main>
+
+    <!-- Notificación Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-900 text-white px-6 py-3 rounded-lg shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-3">
+        <i class="fa-solid fa-circle-check text-green-400"></i>
+        <span id="toast-message">Acción completada</span>
+    </div>
+
+    <!-- Cropper.js Script -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+
+    <script>
+        // Referencias del DOM
+        const imageUpload = document.getElementById('image-upload');
+        const imageWorkspace = document.getElementById('image-workspace');
+        const workspaceContainer = document.getElementById('workspace-container');
+        const emptyState = document.getElementById('empty-state');
+        const toolsSection = document.getElementById('tools-section');
+        const processingCanvas = document.getElementById('processing-canvas');
+        
+        // Botones UI
+        const btnRatioFree = document.getElementById('btn-ratio-free');
+        const btnRatioSquare = document.getElementById('btn-ratio-square');
+        const btnRatioCircle = document.getElementById('btn-ratio-circle');
+        const btnApplyCrop = document.getElementById('btn-apply-crop');
+        const btnApplyResolution = document.getElementById('btn-apply-resolution');
+        const btnRemoveBg = document.getElementById('btn-remove-bg');
+        const btnExportPng = document.getElementById('btn-export-png');
+        const btnExportJpg = document.getElementById('btn-export-jpg');
+        
+        // Botones Historial
+        const btnUndo = document.getElementById('btn-undo');
+        const btnRedo = document.getElementById('btn-redo');
+
+        // Inputs
+        const inputWidth = document.getElementById('input-width');
+        const inputHeight = document.getElementById('input-height');
+        const toleranceSlider = document.getElementById('tolerance-slider');
+        const toleranceVal = document.getElementById('tolerance-val');
+
+        let cropper = null;
+        let currentFilename = "imagen_editada";
+        let isCircularCrop = false;
+
+        // ==========================================
+        // SISTEMA DE HISTORIAL (DESHACER / REHACER)
+        // ==========================================
+        let historyStates = [];
+        let currentStateIndex = -1;
+
+        function saveState(dataUrl) {
+            // Si hacemos un cambio tras haber "deshecho", borramos el futuro alterno
+            if (currentStateIndex < historyStates.length - 1) {
+                historyStates = historyStates.slice(0, currentStateIndex + 1);
+            }
+            historyStates.push(dataUrl);
+            currentStateIndex++;
+            updateHistoryButtons();
+        }
+
+        function updateHistoryButtons() {
+            const canUndo = currentStateIndex > 0;
+            const canRedo = currentStateIndex < historyStates.length - 1;
+
+            btnUndo.disabled = !canUndo;
+            btnRedo.disabled = !canRedo;
+
+            btnUndo.classList.toggle('opacity-50', !canUndo);
+            btnUndo.classList.toggle('cursor-not-allowed', !canUndo);
+            
+            btnRedo.classList.toggle('opacity-50', !canRedo);
+            btnRedo.classList.toggle('cursor-not-allowed', !canRedo);
+        }
+
+        btnUndo.addEventListener('click', () => {
+            if (currentStateIndex > 0) {
+                currentStateIndex--;
+                loadState(historyStates[currentStateIndex]);
+                showToast("Deshacer aplicado");
+            }
+        });
+
+        btnRedo.addEventListener('click', () => {
+            if (currentStateIndex < historyStates.length - 1) {
+                currentStateIndex++;
+                loadState(historyStates[currentStateIndex]);
+                showToast("Rehacer aplicado");
+            }
+        });
+
+        function loadState(dataUrl) {
+            if (cropper) {
+                cropper.replace(dataUrl);
+                updateHistoryButtons();
+            }
+        }
+
+        // ==========================================
+        // UTILIDADES Y NOTIFICACIONES
+        // ==========================================
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').innerText = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // 1. Manejar subida de imagen
+        imageUpload.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                currentFilename = file.name.replace(/\.[^/.]+$/, "");
+                const reader = new FileReader();
+                
+                reader.onload = function(event) {
+                    const dataUrl = event.target.result;
+                    
+                    // Resetear historial al cargar nueva imagen
+                    historyStates = [];
+                    currentStateIndex = -1;
+                    
+                    imageWorkspace.src = dataUrl;
+                    emptyState.classList.add('hidden');
+                    workspaceContainer.classList.remove('hidden');
+                    
+                    setTimeout(() => { workspaceContainer.classList.add('opacity-100'); }, 50);
+                    toolsSection.classList.remove('opacity-50', 'pointer-events-none');
+                    
+                    initCropper();
+                    setRatioButtonActive(btnRatioFree);
+                    
+                    // Guardar el estado inicial en el historial
+                    saveState(dataUrl);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function initCropper() {
+            if (cropper) { cropper.destroy(); }
+            
+            cropper = new Cropper(imageWorkspace, {
+                viewMode: 1, // Restringe la imagen para que encaje en el lienzo sin desbordar
+                dragMode: 'move', // Permite mover la imagen
+                aspectRatio: NaN,
+                autoCropArea: 1, // Selecciona toda la imagen por defecto
+                responsive: true,
+                restore: false,
+                guides: true,
+                center: true,
+                highlight: false,
+                cropBoxMovable: true,
+                cropBoxResizable: true,
+                toggleDragModeOnDblclick: false,
+                ready() {
+                    // Actualizamos W y H cada vez que se carga/reemplaza la imagen (incluso al Deshacer)
+                    const imgData = cropper.getImageData();
+                    inputWidth.value = Math.round(imgData.naturalWidth);
+                    inputHeight.value = Math.round(imgData.naturalHeight);
+                }
+            });
+        }
+
+        // 2. Controles de Recorte
+        function setRatioButtonActive(activeBtn) {
+            btnRatioFree.classList.remove('border-indigo-500', 'bg-indigo-50');
+            btnRatioSquare.classList.remove('border-indigo-500', 'bg-indigo-50');
+            btnRatioCircle.classList.remove('border-indigo-500', 'bg-indigo-50');
+            
+            activeBtn.classList.add('border-indigo-500', 'bg-indigo-50');
+
+            // Habilitar la apariencia de círculo visualmente en el Cropper
+            if (activeBtn === btnRatioCircle) {
+                workspaceContainer.classList.add('is-circular-mode');
+                isCircularCrop = true;
+            } else {
+                workspaceContainer.classList.remove('is-circular-mode');
+                isCircularCrop = false;
+            }
+        }
+
+        btnRatioFree.addEventListener('click', () => {
+            if (cropper) {
+                cropper.setAspectRatio(NaN);
+                setRatioButtonActive(btnRatioFree);
+            }
+        });
+
+        btnRatioSquare.addEventListener('click', () => {
+            if (cropper) {
+                cropper.setAspectRatio(1);
+                setRatioButtonActive(btnRatioSquare);
+            }
+        });
+
+        btnRatioCircle.addEventListener('click', () => {
+            if (cropper) {
+                cropper.setAspectRatio(1); // El círculo necesita un canvas cuadrado perfecto
+                setRatioButtonActive(btnRatioCircle);
+            }
+        });
+
+        btnApplyCrop.addEventListener('click', () => {
+            if (!cropper) return;
+            const croppedCanvas = cropper.getCroppedCanvas({
+                imageSmoothingEnabled: true,
+                imageSmoothingQuality: 'high',
+            });
+            
+            let finalCanvas = croppedCanvas;
+
+            // Si es recorte circular, creamos un canvas nuevo que enmascare el recorte
+            if (isCircularCrop) {
+                finalCanvas = document.createElement('canvas');
+                finalCanvas.width = croppedCanvas.width;
+                finalCanvas.height = croppedCanvas.height;
+                const ctx = finalCanvas.getContext('2d');
+                
+                const centerX = finalCanvas.width / 2;
+                const centerY = finalCanvas.height / 2;
+                const radius = Math.min(centerX, centerY);
+                
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+                ctx.clip(); // Todo lo que se dibuje a continuación se limitará a este círculo
+                ctx.drawImage(croppedCanvas, 0, 0);
+            }
+
+            const newUrl = finalCanvas.toDataURL('image/png');
+            
+            // Reemplazar imagen y guardar en historial
+            cropper.replace(newUrl); 
+            saveState(newUrl);
+            
+            showToast("Recorte aplicado");
+        });
+
+        // 3. Resolución / Escalar Imagen
+        btnApplyResolution.addEventListener('click', () => {
+            if (!cropper) return;
+            const targetWidth = parseInt(inputWidth.value);
+            const targetHeight = parseInt(inputHeight.value);
+
+            if (!targetWidth || !targetHeight || targetWidth <= 0 || targetHeight <= 0) {
+                showToast("Por favor, ingresa un ancho y alto válidos.");
+                return;
+            }
+
+            // Tomamos la imagen completa actual
+            const currentCanvas = cropper.getCroppedCanvas();
+            
+            // Usamos el processingCanvas para dibujar la imagen a la nueva resolución
+            const ctx = processingCanvas.getContext('2d');
+            processingCanvas.width = targetWidth;
+            processingCanvas.height = targetHeight;
+            
+            // Limpiar y dibujar escalado
+            ctx.clearRect(0, 0, targetWidth, targetHeight);
+            ctx.drawImage(currentCanvas, 0, 0, targetWidth, targetHeight);
+
+            const resizedUrl = processingCanvas.toDataURL('image/png');
+            
+            // Reemplazar imagen y guardar en historial
+            cropper.replace(resizedUrl);
+            saveState(resizedUrl);
+            
+            showToast(`Resolución ajustada a ${targetWidth}x${targetHeight}`);
+        });
+
+        // 4. Removedor de Fondo
+        toleranceSlider.addEventListener('input', (e) => {
+            toleranceVal.innerText = e.target.value;
+        });
+
+        btnRemoveBg.addEventListener('click', () => {
+            if (!cropper) return;
+
+            const croppedCanvas = cropper.getCroppedCanvas();
+            const ctx = processingCanvas.getContext('2d');
+            processingCanvas.width = croppedCanvas.width;
+            processingCanvas.height = croppedCanvas.height;
+            
+            ctx.drawImage(croppedCanvas, 0, 0);
+
+            const imageData = ctx.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
+            const data = imageData.data;
+            const tolerance = parseInt(toleranceSlider.value);
+
+            // Analiza el color de referencia (Esquina superior izquierda, pixel índice 0)
+            const bgR = data[0];
+            const bgG = data[1];
+            const bgB = data[2];
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const a = data[i + 3];
+
+                if (a === 0) continue; // Ya es transparente
+
+                // Distancia Euclidiana entre colores
+                const distance = Math.sqrt(
+                    Math.pow(r - bgR, 2) + 
+                    Math.pow(g - bgG, 2) + 
+                    Math.pow(b - bgB, 2)
+                );
+
+                if (distance <= tolerance) {
+                    data[i + 3] = 0; // Hacerlo Transparente (Alpha = 0)
+                }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+            const newImgUrl = processingCanvas.toDataURL('image/png');
+            
+            // Reemplazar imagen y guardar en historial
+            cropper.replace(newImgUrl);
+            saveState(newImgUrl);
+            
+            showToast("¡Fondo eliminado!");
+        });
+
+        // 5. Exportar Imagen
+        function downloadImage(format) {
+            if (!cropper) return;
+
+            const finalCanvas = cropper.getCroppedCanvas({
+                imageSmoothingEnabled: true,
+                imageSmoothingQuality: 'high',
+            });
+
+            let dataUrl;
+            let extension;
+
+            if (format === 'jpg') {
+                const whiteCanvas = document.createElement('canvas');
+                whiteCanvas.width = finalCanvas.width;
+                whiteCanvas.height = finalCanvas.height;
+                const wCtx = whiteCanvas.getContext('2d');
+                
+                // Rellenar de blanco para evitar fondo negro en JPG al haber transparencias
+                wCtx.fillStyle = '#FFFFFF';
+                wCtx.fillRect(0, 0, whiteCanvas.width, whiteCanvas.height);
+                wCtx.drawImage(finalCanvas, 0, 0);
+                
+                dataUrl = whiteCanvas.toDataURL('image/jpeg', 0.95);
+                extension = 'jpg';
+            } else {
+                dataUrl = finalCanvas.toDataURL('image/png');
+                extension = 'png';
+            }
+
+            const link = document.createElement('a');
+            link.download = `${currentFilename}_editada.${extension}`;
+            link.href = dataUrl;
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showToast(`Exportado como ${extension.toUpperCase()}`);
+        }
+
+        btnExportPng.addEventListener('click', () => downloadImage('png'));
+        btnExportJpg.addEventListener('click', () => downloadImage('jpg'));
+
+    </script>
+</body>
+</html>
