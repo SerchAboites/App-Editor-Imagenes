@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creative Studio - Menú Principal</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+        }
+
+        /* Animación suave para las tarjetas */
+        .card-hover {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border-color: #475569;
+        }
+
+        /* Animación de esferas desenfocadas de fondo (Blob) */
+        .animate-blob {
+            animation: blob 7s infinite;
+        }
+        
+        .animation-delay-2000 {
+            animation-delay: 2s;
+        }
+
+        @keyframes blob {
+            0% { transform: translate(0px, 0px) scale(1); }
+            33% { transform: translate(30px, -50px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+            100% { transform: translate(0px, 0px) scale(1); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center relative overflow-hidden text-gray-200">
+
+    <!-- Formas Abstractas de Fondo -->
+    <div class="absolute top-10 -left-10 w-96 h-96 bg-indigo-600 rounded-full mix-blend-screen filter blur-[100px] opacity-30 animate-blob"></div>
+    <div class="absolute bottom-10 -right-10 w-96 h-96 bg-blue-600 rounded-full mix-blend-screen filter blur-[100px] opacity-30 animate-blob animation-delay-2000"></div>
+
+    <!-- Encabezado -->
+    <div class="z-10 text-center mb-16 px-4">
+        <h1 class="text-5xl md:text-6xl font-extrabold tracking-tight mb-4 text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400 drop-shadow-sm">
+            Creative Studio
+        </h1>
+        <p class="text-gray-400 text-lg max-w-xl mx-auto">
+            Elige la herramienta de diseño con la que deseas trabajar hoy.
+        </p>
+    </div>
+
+    <!-- Contenedor de Tarjetas -->
+    <div class="z-10 flex flex-col md:flex-row gap-8 px-6 w-full max-w-5xl justify-center">
+        
+        <!-- Tarjeta 1: Editor Matricial -->
+        <a href="matricial.html" class="card-hover bg-gray-800/80 backdrop-blur-sm border border-gray-700 rounded-3xl p-10 flex flex-col items-center text-center group cursor-pointer w-full md:w-1/2 relative overflow-hidden">
+            <!-- Efecto de brillo de fondo al hacer hover -->
+            <div class="absolute inset-0 bg-gradient-to-br from-indigo-600/10 to-purple-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            
+            <!-- Ícono principal animado -->
+            <div class="w-24 h-24 bg-indigo-900/40 border border-indigo-700/50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300 shadow-lg shadow-indigo-900/50">
+                <i class="fa-solid fa-wand-magic-sparkles text-4xl text-indigo-400"></i>
+            </div>
+            
+            <h2 class="text-2xl font-bold text-white mb-3">Editor Matricial</h2>
+            <p class="text-gray-400 mb-8 flex-1">
+                Sube imágenes, recórtalas, elimina fondos mediante tolerancia de color y procesa lotes enteros con compresión WebP.
+            </p>
+            
+            <!-- Botón simulado (El enlace completo está en la tarjeta) -->
+            <span class="w-full inline-flex items-center justify-center px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-colors shadow-md shadow-indigo-600/20">
+                Entrar al Estudio <i class="fa-solid fa-arrow-right ml-2 group-hover:translate-x-1 transition-transform"></i>
+            </span>
+        </a>
+
+        <!-- Tarjeta 2: Editor Vectorial -->
+        <a href="vectorial.html" class="card-hover bg-gray-800/80 backdrop-blur-sm border border-gray-700 rounded-3xl p-10 flex flex-col items-center text-center group cursor-pointer w-full md:w-1/2 relative overflow-hidden">
+            <!-- Efecto de brillo de fondo al hacer hover -->
+            <div class="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-cyan-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            
+            <!-- Ícono principal animado -->
+            <div class="w-24 h-24 bg-blue-900/40 border border-blue-700/50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300 shadow-lg shadow-blue-900/50">
+                <i class="fa-solid fa-bezier-curve text-4xl text-blue-400"></i>
+            </div>
+            
+            <h2 class="text-2xl font-bold text-white mb-3">Editor Vectorial</h2>
+            <p class="text-gray-400 mb-8 flex-1">
+                Crea trazados con pluma, utiliza buscatrazos lógicos, administra capas y auto-vectoriza siluetas y colores.
+            </p>
+            
+            <!-- Botón simulado -->
+            <span class="w-full inline-flex items-center justify-center px-6 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-colors shadow-md shadow-blue-600/20">
+                Entrar al Lienzo <i class="fa-solid fa-arrow-right ml-2 group-hover:translate-x-1 transition-transform"></i>
+            </span>
+        </a>
+        
+    </div>
+
+    <!-- Footer -->
+    <div class="absolute bottom-6 text-gray-500 text-sm z-10">
+        <i class="fa-solid fa-code mr-1"></i> Panel de Selección de Proyectos
+    </div>
+
+</body>
+</html>
