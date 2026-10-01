@@ -458,31 +458,33 @@
             <div class="flex flex-1 gap-6 overflow-hidden">
                 <!-- Columna Izquierda: Opciones y Previsualizador -->
                 <div class="w-1/2 flex flex-col gap-4">
-                    <div
-                        class="bg-gray-900 p-3 rounded border border-gray-700 flex items-center justify-between shadow-inner">
+                    <div class="bg-gray-900 p-3 rounded border border-gray-700 flex items-center justify-between shadow-inner">
                         <span class="text-sm font-medium text-gray-300">Fondo del Artboard</span>
                         <div class="flex bg-gray-800 rounded-lg p-1 border border-gray-700">
-                            <button id="svg-bg-transparent"
-                                class="px-3 py-1.5 text-xs font-bold rounded-md text-gray-400 hover:text-white transition">Transparente</button>
-                            <button id="svg-bg-white"
-                                class="px-3 py-1.5 text-xs font-bold rounded-md bg-blue-600 text-white shadow transition">Blanco</button>
+                            <button id="svg-bg-transparent" class="px-3 py-1.5 text-xs font-bold rounded-md text-gray-400 hover:text-white transition">Transparente</button>
+                            <button id="svg-bg-white" class="px-3 py-1.5 text-xs font-bold rounded-md bg-blue-600 text-white shadow transition">Blanco</button>
                         </div>
                     </div>
-
-                    <div
-                        class="flex-1 border border-gray-700 rounded-lg overflow-hidden flex flex-col bg-gray-900 shadow-inner">
-                        <div
-                            class="text-xs text-gray-500 p-2 border-b border-gray-700 bg-gray-800 uppercase font-bold tracking-wider flex justify-between">
-                            <span>Vista Previa Responsiva</span>
-                            <span class="text-blue-400"><i class="fa-solid fa-expand"></i> 100% adaptable</span>
-                        </div>
-                        <!-- Contenedor con patrón de ajedrez en CSS para notar la transparencia -->
-                        <div class="flex-1 w-full h-full relative p-4"
-                            style="background-image: linear-gradient(45deg, #374151 25%, transparent 25%, transparent 75%, #374151 75%, #374151), linear-gradient(45deg, #374151 25%, transparent 25%, transparent 75%, #374151 75%, #374151); background-size: 20px 20px; background-position: 0 0, 10px 10px;">
-                            <div id="svg-preview-container"
-                                class="w-full h-full bg-transparent border border-dashed border-gray-500/50 relative">
-                                <!-- El SVG se inyectará aquí -->
+                    
+                    <div class="flex-1 border border-gray-700 rounded-lg overflow-hidden flex flex-col bg-gray-900 shadow-inner">
+                        <div class="text-xs text-gray-500 p-2 border-b border-gray-700 bg-gray-800 uppercase font-bold tracking-wider flex justify-between items-center">
+                            <span>Vista Previa</span>
+                            <!-- NUEVOS CONTROLES DE ESCENARIO -->
+                            <div class="flex gap-1" id="scene-controls">
+                                <button class="scene-btn active px-2 py-1 bg-blue-600 text-white rounded text-[10px] transition" data-w="100%" data-h="100%" title="Contenedor Completo">100%</button>
+                                <button class="scene-btn px-2 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded text-[10px] transition" data-w="100%" data-h="120px" title="Simular un Banner Web">Banner</button>
+                                <button class="scene-btn px-2 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded text-[10px] transition" data-w="180px" data-h="100%" title="Simular Pantalla Móvil">Móvil</button>
+                                <button class="scene-btn px-2 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded text-[10px] transition" data-w="180px" data-h="180px" title="Simular una Tarjeta Cuadrada">Caja</button>
                             </div>
+                        </div>
+                        <!-- Fondo Ajedrezado centrado -->
+                        <div class="flex-1 w-full h-full relative p-4 flex items-center justify-center overflow-auto" style="background-image: linear-gradient(45deg, #374151 25%, transparent 25%, transparent 75%, #374151 75%, #374151), linear-gradient(45deg, #374151 25%, transparent 25%, transparent 75%, #374151 75%, #374151); background-size: 20px 20px; background-position: 0 0, 10px 10px;">
+                            
+                            <!-- EL CONTENEDOR PADRE SIMULADO (CON LÍNEAS VERDES VISIBLES) -->
+                            <div id="svg-preview-container" class="transition-all duration-300 border-2 border-dashed border-green-400 bg-black/30 shadow-2xl" style="width: 100%; height: 100%;">
+                                <!-- El código final del SVG se inyectará aquí adentro -->
+                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -1997,6 +1999,28 @@
             document.getElementById('pf-subtract').addEventListener('click', () => applyPathfinder('subtract'));
             document.getElementById('pf-intersect').addEventListener('click', () => applyPathfinder('intersect'));
             document.getElementById('pf-exclude').addEventListener('click', () => applyPathfinder('exclude'));
+
+
+            // --- LÓGICA DE ESCENARIOS DE VISTA PREVIA ---
+            const sceneBtns = document.querySelectorAll('.scene-btn');
+            
+            sceneBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // Resetear estilos de todos los botones
+                    sceneBtns.forEach(b => {
+                        b.classList.remove('bg-blue-600', 'text-white');
+                        b.classList.add('bg-gray-700', 'text-gray-300');
+                    });
+                    
+                    // Activar el botón clicado
+                    btn.classList.add('bg-blue-600', 'text-white');
+                    btn.classList.remove('bg-gray-700', 'text-gray-300');
+                    
+                    // Cambiar las dimensiones del contenedor punteado verde
+                    svgPreviewContainer.style.width = btn.dataset.w;
+                    svgPreviewContainer.style.height = btn.dataset.h;
+                });
+            });
 
 
             // Init Panels
