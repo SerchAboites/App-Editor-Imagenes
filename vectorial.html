@@ -128,6 +128,7 @@
         <div class="flex items-center gap-4">
 
 
+
             <!-- Botones de Historial (Deshacer / Rehacer) -->
             <div class="flex items-center gap-2 border-r border-gray-700 pr-4">
                 <button id="btn-undo"
@@ -155,6 +156,13 @@
             </div>
 
             <div class="flex items-center gap-2 border-l border-gray-700 pl-4">
+
+                <!-- NUEVO BOTÓN COPIAR SVG -->
+                <button id="btn-copy-svg"
+                    class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 text-purple-400 border border-purple-500/30">
+                    <i class="fa-solid fa-code"></i> Copiar Código SVG
+                </button>
+
                 <button onclick="exportArt('svg')"
                     class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 text-orange-400">
                     <i class="fa-solid fa-file-code"></i> SVG
@@ -203,6 +211,12 @@
             </button>
 
             <button
+                class="tool-btn w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-gray-300"
+                data-tool="circle" title="Ellipse Tool (O) - Hold Shift for perfect circle">
+                <i class="fa-regular fa-circle"></i>
+            </button>
+
+            <button
                 class="w-10 h-10 rounded-lg hover:bg-gray-700 flex items-center justify-center text-green-400 relative overflow-hidden transition mt-1"
                 title="Upload Image">
                 <i class="fa-solid fa-image"></i>
@@ -224,12 +238,23 @@
                 title="Clear Canvas">
                 <i class="fa-solid fa-burst"></i>
             </button>
+
+
+
         </aside>
 
         <main id="workspace" class="flex-1 relative">
             <div class="canvas-container" id="canvas-wrapper">
                 <canvas id="c" resize="true"></canvas>
             </div>
+
+
+            <!-- Nueva Barra Contextual Inferior -->
+            <div id="bottom-context-bar"
+                class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-700 rounded-full shadow-2xl px-4 py-2 flex gap-3 transition-all hidden">
+                <!-- Los botones se inyectan aquí con JS -->
+            </div>
+
         </main>
 
         <aside class="w-64 bg-gray-800 border-l border-gray-700 flex flex-col shrink-0 z-10">
@@ -417,6 +442,70 @@
         <div id="ctx-layers-list" class="max-h-32 overflow-y-auto"></div>
     </div>
 
+    <!-- Modal Copiar Código SVG (Mejorado con Preview) -->
+    <div id="modal-copy-svg"
+        class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+        <div
+            class="bg-gray-800 border border-gray-700 p-6 rounded-lg shadow-2xl w-full max-w-5xl flex flex-col h-[85vh] transform transition-all">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-white"><i class="fa-solid fa-code text-purple-400 mr-2"></i> Exportar
+                    Código SVG</h3>
+                <button id="modal-svg-close" class="text-gray-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <div class="flex flex-1 gap-6 overflow-hidden">
+                <!-- Columna Izquierda: Opciones y Previsualizador -->
+                <div class="w-1/2 flex flex-col gap-4">
+                    <div
+                        class="bg-gray-900 p-3 rounded border border-gray-700 flex items-center justify-between shadow-inner">
+                        <span class="text-sm font-medium text-gray-300">Fondo del Artboard</span>
+                        <div class="flex bg-gray-800 rounded-lg p-1 border border-gray-700">
+                            <button id="svg-bg-transparent"
+                                class="px-3 py-1.5 text-xs font-bold rounded-md text-gray-400 hover:text-white transition">Transparente</button>
+                            <button id="svg-bg-white"
+                                class="px-3 py-1.5 text-xs font-bold rounded-md bg-blue-600 text-white shadow transition">Blanco</button>
+                        </div>
+                    </div>
+
+                    <div
+                        class="flex-1 border border-gray-700 rounded-lg overflow-hidden flex flex-col bg-gray-900 shadow-inner">
+                        <div
+                            class="text-xs text-gray-500 p-2 border-b border-gray-700 bg-gray-800 uppercase font-bold tracking-wider flex justify-between">
+                            <span>Vista Previa Responsiva</span>
+                            <span class="text-blue-400"><i class="fa-solid fa-expand"></i> 100% adaptable</span>
+                        </div>
+                        <!-- Contenedor con patrón de ajedrez en CSS para notar la transparencia -->
+                        <div class="flex-1 w-full h-full relative p-4"
+                            style="background-image: linear-gradient(45deg, #374151 25%, transparent 25%, transparent 75%, #374151 75%, #374151), linear-gradient(45deg, #374151 25%, transparent 25%, transparent 75%, #374151 75%, #374151); background-size: 20px 20px; background-position: 0 0, 10px 10px;">
+                            <div id="svg-preview-container"
+                                class="w-full h-full bg-transparent border border-dashed border-gray-500/50 relative">
+                                <!-- El SVG se inyectará aquí -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Columna Derecha: Código -->
+                <div class="w-1/2 flex flex-col">
+                    <p class="text-gray-400 text-sm mb-2">Este código incluye un contenedor <code>&lt;div&gt;</code> que
+                        se adapta al 100%.</p>
+                    <textarea id="svg-code-area"
+                        class="flex-1 w-full bg-gray-900 border border-gray-700 rounded-md p-4 text-xs font-mono text-green-400 outline-none resize-none overflow-y-auto mb-4 whitespace-pre shadow-inner"
+                        readonly></textarea>
+
+                    <div class="flex justify-end gap-3">
+                        <button id="modal-svg-copy-btn"
+                            class="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded transition shadow-lg flex items-center gap-2">
+                            <i class="fa-regular fa-copy"></i> Copiar al Portapapeles
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         paper.install(window);
 
@@ -515,8 +604,75 @@
             let currentStrokeWidth = 2;
             let activeTool = 'select';
             let isSpacebarDown = false;
+            let isAltDown = false;
             let lastPanPoint = null;
 
+            // --- NUEVAS VARIABLES DE MODOS TÁCTILES ---
+            let currentPenMode = 'draw';   // 'draw', 'delete'
+            let currentCircleMode = 'free'; // 'free', 'perfect'
+            let currentSelectMode = 'new';  // 'new', 'add'
+
+            // --- FUNCIÓN QUE ACTUALIZA LA BARRA CONTEXTUAL ---
+            function updateContextBar(toolName) {
+                const bar = document.getElementById('bottom-context-bar');
+                bar.innerHTML = '';
+
+                if (toolName === 'circle') {
+                    bar.classList.remove('hidden');
+                    bar.innerHTML = `
+                        <button class="ctx-btn px-4 py-1.5 rounded-full text-sm font-medium transition ${currentCircleMode === 'free' ? 'bg-blue-600 text-white shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-700'}" data-mode="free">
+                            <i class="fa-regular fa-circle mr-1"></i> Libre
+                        </button>
+                        <button class="ctx-btn px-4 py-1.5 rounded-full text-sm font-medium transition ${currentCircleMode === 'perfect' ? 'bg-blue-600 text-white shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-700'}" data-mode="perfect">
+                            <i class="fa-solid fa-circle mr-1"></i> Proporción Perfecta
+                        </button>
+                    `;
+                    bar.querySelectorAll('.ctx-btn').forEach(btn => {
+                        btn.addEventListener('click', () => { currentCircleMode = btn.dataset.mode; updateContextBar('circle'); });
+                    });
+
+                } else if (toolName === 'pen') {
+                    bar.classList.remove('hidden');
+                    bar.innerHTML = `
+                        <button class="ctx-btn px-4 py-1.5 rounded-full text-sm font-medium transition ${currentPenMode === 'draw' ? 'bg-blue-600 text-white shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-700'}" data-mode="draw">
+                            <i class="fa-solid fa-pen-nib mr-1"></i> Trazar / Añadir
+                        </button>
+                        <button class="ctx-btn px-4 py-1.5 rounded-full text-sm font-medium transition ${currentPenMode === 'delete' ? 'bg-red-600 text-white shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-700'}" data-mode="delete">
+                            <i class="fa-solid fa-eraser mr-1"></i> Borrar Nodo
+                        </button>
+                    `;
+                    bar.querySelectorAll('.ctx-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            currentPenMode = btn.dataset.mode;
+                            updateContextBar('pen');
+
+                            // Forzar cambio visual de cursor
+                            if (currentPenMode === 'delete') {
+                                let svgIcon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' width='24' height='24'%3E%3Cpath d='M362.7 19.3L314.3 67.7 444.3 197.7l48.4-48.4c25-25 25-65.5 0-90.5L453.3 19.3c-25-25-65.5-25-90.5 0zm-71 71L58.6 323.5c-10.4 10.4-18 23.3-22.2 37.4L1 481.2C-1.5 489.7 .8 498.8 7 505s15.3 8.5 23.7 6.1l120.3-35.4c14.1-4.2 27-11.8 37.4-22.2L421.7 220.3 291.7 90.3z' fill='%231f2937' stroke='white' stroke-width='20'/%3E%3Crect x='300' y='360' width='180' height='60' fill='%23ef4444' rx='30' stroke='white' stroke-width='10'/%3E%3C/svg%3E";
+                                paper.view.element.style.cursor = `url("${svgIcon}") 0 24, auto`;
+                            } else {
+                                paper.view.element.style.cursor = 'crosshair';
+                            }
+                        });
+                    });
+
+                } else if (toolName === 'select') {
+                    bar.classList.remove('hidden');
+                    bar.innerHTML = `
+                        <button class="ctx-btn px-4 py-1.5 rounded-full text-sm font-medium transition ${currentSelectMode === 'new' ? 'bg-blue-600 text-white shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-700'}" data-mode="new">
+                            <i class="fa-solid fa-arrow-pointer mr-1"></i> Normal
+                        </button>
+                        <button class="ctx-btn px-4 py-1.5 rounded-full text-sm font-medium transition ${currentSelectMode === 'add' ? 'bg-blue-600 text-white shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-700'}" data-mode="add">
+                            <i class="fa-solid fa-plus mr-1"></i> Selección Múltiple
+                        </button>
+                    `;
+                    bar.querySelectorAll('.ctx-btn').forEach(btn => {
+                        btn.addEventListener('click', () => { currentSelectMode = btn.dataset.mode; updateContextBar('select'); });
+                    });
+                } else {
+                    bar.classList.add('hidden'); // Ocultar para herramientas sin opciones
+                }
+            }
 
 
             function renderLayersUI() {
@@ -652,7 +808,7 @@
             let marqueeStart = null;
 
             selectTool.onMouseMove = function (event) {
-                if (isSpacebarDown) return;
+                if (isSpacebarDown || isAltDown) return;
 
                 uiLayer.locked = false;
                 let hitHandle = uiLayer.hitTest(event.point, { fill: true, bounds: true, tolerance: 5 / paper.view.zoom });
@@ -673,7 +829,8 @@
                 selectIsDragging = false;
                 if (isSpacebarDown) return;
                 selectHitItem = null;
-                marqueePath = null;
+
+                if (marqueePath) { marqueePath.remove(); marqueePath = null; }
 
                 uiLayer.locked = false;
                 let hitHandle = uiLayer.hitTest(event.point, { fill: true, bounds: true, tolerance: 5 / paper.view.zoom });
@@ -694,17 +851,11 @@
                 let hitResult = customHitTest(event.point, { fill: true, stroke: true, bounds: true, tolerance: 5 / paper.view.zoom });
 
                 if (!hitResult) {
-                    // Si no tocamos nada y NO presionamos Shift, deseleccionamos todo
-                    if (!event.modifiers.shift) {
+                    // SE INTEGRA EL MODO TÁCTIL (currentSelectMode === 'add')
+                    if (!event.modifiers.shift && currentSelectMode !== 'add') {
                         project.deselectAll();
                     }
-                    // Iniciamos el recuadro selector
                     marqueeStart = event.point;
-                    marqueePath = new Path.Rectangle(marqueeStart, marqueeStart);
-                    marqueePath.fillColor = 'rgba(59, 130, 246, 0.15)'; // Tailwind blue-500 semi-transparente
-                    marqueePath.strokeColor = '#3b82f6';
-                    marqueePath.strokeWidth = 1 / paper.view.zoom;
-                    uiLayer.addChild(marqueePath);
                     updateUISelection();
                     drawBoundingBox();
                     return;
@@ -712,9 +863,9 @@
 
                 selectHitItem = hitResult.item;
 
-                // Lógica para tecla SHIFT (Selección múltiple)
-                if (event.modifiers.shift) {
-                    selectHitItem.selected = !selectHitItem.selected; // Alternar estado
+                // SE INTEGRA EL MODO TÁCTIL (currentSelectMode === 'add')
+                if (event.modifiers.shift || currentSelectMode === 'add') {
+                    selectHitItem.selected = !selectHitItem.selected;
                 } else {
                     if (!selectHitItem.selected) {
                         project.deselectAll();
@@ -732,17 +883,19 @@
                 selectIsDragging = true;
                 if (isSpacebarDown) return;
 
-                // 1. Dibujar Recuadro Selector
-                if (marqueePath) {
-                    marqueePath.bounds = new Rectangle(marqueeStart, event.point);
+                if (marqueeStart && !selectHitItem && !scaleActive) {
+                    if (marqueePath) marqueePath.remove();
+                    marqueePath = new Path.Rectangle(marqueeStart, event.point);
+                    marqueePath.fillColor = 'rgba(59, 130, 246, 0.25)';
+                    marqueePath.strokeColor = '#3b82f6';
+                    marqueePath.strokeWidth = 1 / paper.view.zoom;
+                    uiLayer.addChild(marqueePath);
                     return;
                 }
 
-                // 2. Escalar 
                 if (scaleActive && scaleOrigin) {
                     let lastVector = event.lastPoint.subtract(scaleOrigin);
                     let currentVector = event.point.subtract(scaleOrigin);
-
                     let sx = Math.abs(lastVector.x) > 0.0001 ? currentVector.x / lastVector.x : 1;
                     let sy = Math.abs(lastVector.y) > 0.0001 ? currentVector.y / lastVector.y : 1;
 
@@ -758,7 +911,6 @@
                     return;
                 }
 
-                // 3. Mover objetos
                 if (selectHitItem) {
                     project.selectedItems.forEach(item => {
                         if (item.layer.name !== 'background' && item.layer.name !== 'uiLayer') {
@@ -774,6 +926,7 @@
                     let marqueeBounds = marqueePath.bounds;
                     marqueePath.remove();
                     marqueePath = null;
+                    marqueeStart = null;
 
                     let items = project.getItems({
                         overlapping: marqueeBounds,
@@ -790,17 +943,14 @@
 
                     updateUISelection();
                     drawBoundingBox();
+                } else {
+                    marqueeStart = null;
                 }
 
-                // Si arrastramos o escalamos, guardamos en el historial
-                if (selectIsDragging) {
-                    saveState();
-                }
-
+                if (selectIsDragging) saveState();
                 selectIsDragging = false;
                 scaleActive = false;
             };
-
 
             let directSelectTool = new Tool();
             let dsHitSegment = null, dsHitPath = null, dsHitHandle = null;
@@ -854,35 +1004,77 @@
             let currentDrawingPath = null;
             let hoverState = null;
             let resumePath = null;
-            let penConvertHitSegment = null;
-            let penIsConvertDrag = false;
+            let hoverLocation = null;
 
             penTool.onMouseMove = function (event) {
-                if (isSpacebarDown) return;
+                if (isSpacebarDown || isAltDown) return;
+
                 hoverState = null;
                 hoverIndicator.visible = false;
                 resumePath = null;
-                paper.view.element.style.cursor = event.modifiers.alt ? 'pointer' : 'crosshair';
+                hoverLocation = null;
 
-                if (event.modifiers.alt) return;
+                // SI ESTAMOS EN MODO BORRAR (TÁCTIL)
+                if (currentPenMode === 'delete') {
+                    let hit = customHitTest(event.point, { segments: true, tolerance: 8 / paper.view.zoom });
+                    if (hit && hit.item.selected && hit.type === 'segment') {
+                        hoverIndicator.position = hit.segment.point;
+                        hoverIndicator.visible = true;
+                        hoverIndicator.strokeColor = '#ef4444'; // Rojo (Borrar)
+                    }
+                    return; // No hacer nada más si estamos en modo borrar
+                }
 
+                // SI ESTAMOS EN MODO TRAZAR
+                paper.view.element.style.cursor = 'crosshair';
+
+                // Prioridad 1: Cerrar trazo actual
                 if (currentDrawingPath && currentDrawingPath.segments.length > 1) {
                     let firstSegment = currentDrawingPath.firstSegment;
                     if (event.point.getDistance(firstSegment.point) < 10 / paper.view.zoom) {
                         hoverState = 'close';
                         hoverIndicator.position = firstSegment.point;
                         hoverIndicator.visible = true;
+                        hoverIndicator.strokeColor = '#3b82f6';
                         paper.view.element.style.cursor = 'pointer';
+                        return;
                     }
-                } else if (!currentDrawingPath) {
-                    let hit = customHitTest(event.point, { ends: true, tolerance: 10 / paper.view.zoom });
-                    if (hit && hit.item && !hit.item.closed) {
-                        hoverState = 'resume';
-                        hoverIndicator.position = hit.segment.point;
-                        hoverIndicator.visible = true;
-                        resumePath = hit.item;
-                        if (hit.segment === hit.item.firstSegment) hit.item.reverse();
-                        paper.view.element.style.cursor = 'copy';
+                }
+
+                // Prioridad 2: Interactuar con trazos si NO estamos dibujando
+                if (!currentDrawingPath) {
+                    let hit = customHitTest(event.point, { segments: true, stroke: true, ends: true, tolerance: 8 / paper.view.zoom });
+
+                    if (hit) {
+                        // A. Continuar un trazo abierto
+                        if (hit.type === 'segment' && !hit.item.closed && (hit.segment === hit.item.firstSegment || hit.segment === hit.item.lastSegment)) {
+                            hoverState = 'resume';
+                            hoverIndicator.position = hit.segment.point;
+                            hoverIndicator.visible = true;
+                            hoverIndicator.strokeColor = '#3b82f6';
+                            resumePath = hit.item;
+                            if (hit.segment === hit.item.firstSegment) hit.item.reverse();
+                            paper.view.element.style.cursor = 'copy';
+                            return;
+                        }
+
+                        // B. AGREGAR ANCLA: Si el elemento está seleccionado y tocamos su borde (stroke)
+                        if (hit.item.selected && hit.type === 'stroke') {
+                            hoverState = 'add';
+                            hoverIndicator.position = hit.location.point;
+                            hoverIndicator.visible = true;
+                            hoverIndicator.strokeColor = '#10b981'; // Verde (Agregar)
+                            paper.view.element.style.cursor = 'copy';
+                            hoverLocation = hit.location;
+                            return;
+                        }
+
+                        // C. BORRAR ANCLA: Indicador rojo con modo teclado normal (Alt no presionado aún)
+                        if (hit.item.selected && hit.type === 'segment') {
+                            hoverIndicator.position = hit.segment.point;
+                            hoverIndicator.visible = true;
+                            hoverIndicator.strokeColor = '#ef4444';
+                        }
                     }
                 }
             };
@@ -890,26 +1082,40 @@
             penTool.onMouseDown = function (event) {
                 if (isSpacebarDown) return;
 
-                // Convert Mode via Alt
-                if (event.modifiers.alt || event.modifiers.option) {
+                // 1. ELIMINAR ANCLA (Teclado o Interfaz Táctil)
+                if (event.modifiers.alt || event.modifiers.option || currentPenMode === 'delete') {
                     let hitResult = customHitTest(event.point, { segments: true, tolerance: 8 / paper.view.zoom });
-                    if (hitResult) {
-                        penConvertHitSegment = hitResult.segment;
-                        penIsConvertDrag = false;
+                    if (hitResult && hitResult.item.selected) {
+                        hitResult.segment.remove();
+                        saveState();
                     }
                     return;
                 }
 
-                if (hoverState === 'close' && currentDrawingPath) {
-                    currentDrawingPath.closed = true;
-                    currentDrawingPath.fillColor = currentFillColor;
-                    currentDrawingPath.selected = false;
-                    currentDrawingPath = null;
-                    hoverIndicator.visible = false;
-                    updateUISelection();
+                // 2. AGREGAR ANCLA 
+                if (hoverState === 'add' && hoverLocation) {
+                    if (hoverLocation.curve) {
+                        hoverLocation.curve.divideAt(hoverLocation);
+                    } else {
+                        hoverLocation.item.insert(hoverLocation.index + 1, hoverLocation.point);
+                    }
+                    saveState();
                     return;
                 }
 
+                // 3. CERRAR TRAZO
+                if (hoverState === 'close' && currentDrawingPath) {
+                    currentDrawingPath.closed = true;
+                    currentDrawingPath.fillColor = currentFillColor;
+                    currentDrawingPath.selected = true;
+                    currentDrawingPath = null;
+                    hoverIndicator.visible = false;
+                    updateUISelection();
+                    saveState();
+                    return;
+                }
+
+                // 4. CONTINUAR TRAZO
                 if (hoverState === 'resume' && resumePath) {
                     project.deselectAll();
                     currentDrawingPath = resumePath;
@@ -918,6 +1124,7 @@
                     return;
                 }
 
+                // 5. DIBUJO NORMAL
                 if (!currentDrawingPath) {
                     project.deselectAll();
                     currentDrawingPath = new Path();
@@ -929,34 +1136,23 @@
             };
 
             penTool.onMouseDrag = function (event) {
-                if (isSpacebarDown) return;
-                if (penConvertHitSegment) {
-                    penIsConvertDrag = true;
-                    penConvertHitSegment.handleOut = event.point.subtract(penConvertHitSegment.point);
-                    penConvertHitSegment.handleIn = penConvertHitSegment.handleOut.multiply(-1);
-                    return;
-                }
-                if (currentDrawingPath && !event.modifiers.alt) {
+                if (isSpacebarDown || event.modifiers.alt || currentPenMode === 'delete') return;
+
+                if (currentDrawingPath) {
                     let lastSegment = currentDrawingPath.lastSegment;
                     lastSegment.handleOut = event.point.subtract(lastSegment.point);
                     lastSegment.handleIn = lastSegment.handleOut.multiply(-1);
                 }
             };
 
-            penTool.onMouseUp = function (event) {
-                if (isSpacebarDown) return;
-                if (penConvertHitSegment) {
-                    if (!penIsConvertDrag) penConvertHitSegment.clearHandles();
-                    penConvertHitSegment = null;
-                }
-            };
+            penTool.onMouseUp = function (event) { };
 
             let convertTool = new Tool();
             let cvHitSegment = null;
             let cvIsDrag = false;
 
             convertTool.onMouseMove = function (event) {
-                if (isSpacebarDown) return;
+                if (isSpacebarDown || isAltDown) return; // <--- Agrega isAltDown aquí
                 paper.view.element.style.cursor = 'crosshair';
             }
             convertTool.onMouseDown = function (event) {
@@ -997,6 +1193,66 @@
                 setTimeout(() => document.getElementById('prop-text').focus(), 50);
             };
 
+            let circleTool = new Tool();
+            let currentEllipse = null;
+            let ellipseStart = null;
+
+            circleTool.onMouseMove = function (event) {
+                if (isSpacebarDown || isAltDown) return;
+                paper.view.element.style.cursor = 'crosshair';
+            };
+
+            circleTool.onMouseDown = function (event) {
+                if (isSpacebarDown || isAltDown) return;
+                project.deselectAll();
+
+                ellipseStart = event.point;
+
+                currentEllipse = new Path.Ellipse({
+                    point: ellipseStart,
+                    size: [1, 1],
+                    fillColor: currentFillColor,
+                    strokeColor: currentStrokeColor !== 'none' ? currentStrokeColor : '#000000',
+                    strokeWidth: currentStrokeWidth
+                });
+            };
+
+            circleTool.onMouseDrag = function (event) {
+                if (isSpacebarDown || isAltDown || !currentEllipse) return;
+
+                let rect = new Rectangle(ellipseStart, event.point);
+
+                // MODO TÁCTIL O TECLADO (currentCircleMode === 'perfect')
+                if (event.modifiers.shift || currentCircleMode === 'perfect') {
+                    let size = Math.max(rect.width, rect.height);
+                    let signX = event.point.x > ellipseStart.x ? 1 : -1;
+                    let signY = event.point.y > ellipseStart.y ? 1 : -1;
+                    rect = new Rectangle(ellipseStart, ellipseStart.add(new Point(size * signX, size * signY)));
+                }
+
+                currentEllipse.remove();
+                currentEllipse = new Path.Ellipse(rect);
+                currentEllipse.fillColor = currentFillColor;
+                currentEllipse.strokeColor = currentStrokeColor !== 'none' ? currentStrokeColor : '#000000';
+                currentEllipse.strokeWidth = currentStrokeWidth;
+            };
+
+            circleTool.onMouseUp = function (event) {
+                if (isSpacebarDown || isAltDown || !currentEllipse) return;
+
+                if (currentEllipse.bounds.width < 5 && currentEllipse.bounds.height < 5) {
+                    currentEllipse.remove();
+                } else {
+                    currentEllipse.selected = true;
+                    updateUISelection();
+                    drawBoundingBox();
+                    saveState();
+                }
+                currentEllipse = null;
+                ellipseStart = null;
+            };
+
+
             const toolBtns = document.querySelectorAll('.tool-btn');
             toolBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -1006,7 +1262,7 @@
 
                     hoverIndicator.visible = false;
                     paper.view.element.style.cursor = 'default';
-                    drawBoundingBox(); // clear or draw depending on tool
+                    drawBoundingBox();
 
                     if (activeTool !== 'pen' && currentDrawingPath) {
                         if (currentDrawingPath.segments.length < 2) currentDrawingPath.remove();
@@ -1014,14 +1270,28 @@
                         currentDrawingPath = null;
                     }
 
-                    if (activeTool === 'pen') penTool.activate();
+                    // Actualizar Barra Inferior
+                    updateContextBar(activeTool);
+
+                    if (activeTool === 'pen') {
+                        penTool.activate();
+                        if (currentPenMode === 'delete') {
+                            let svgIcon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' width='24' height='24'%3E%3Cpath d='M362.7 19.3L314.3 67.7 444.3 197.7l48.4-48.4c25-25 25-65.5 0-90.5L453.3 19.3c-25-25-65.5-25-90.5 0zm-71 71L58.6 323.5c-10.4 10.4-18 23.3-22.2 37.4L1 481.2C-1.5 489.7 .8 498.8 7 505s15.3 8.5 23.7 6.1l120.3-35.4c14.1-4.2 27-11.8 37.4-22.2L421.7 220.3 291.7 90.3z' fill='%231f2937' stroke='white' stroke-width='20'/%3E%3Crect x='300' y='360' width='180' height='60' fill='%23ef4444' rx='30' stroke='white' stroke-width='10'/%3E%3C/svg%3E";
+                            paper.view.element.style.cursor = `url("${svgIcon}") 0 24, auto`;
+                        } else {
+                            paper.view.element.style.cursor = 'crosshair';
+                        }
+                    }
                     else if (activeTool === 'select') selectTool.activate();
                     else if (activeTool === 'direct') directSelectTool.activate();
                     else if (activeTool === 'convert') convertTool.activate();
                     else if (activeTool === 'text') textTool.activate();
+                    else if (activeTool === 'circle') circleTool.activate();
                 });
             });
 
+            // Inicializar Estado al cargar
+            updateContextBar('select');
             selectTool.activate();
 
             // Panning
@@ -1029,9 +1299,10 @@
             workspace.addEventListener('mousedown', (e) => {
                 if (isSpacebarDown) {
                     lastPanPoint = new Point(e.clientX, e.clientY);
-                    document.body.style.cursor = 'grabbing';
+                    paper.view.element.style.cursor = 'grabbing';
                 }
             });
+
             workspace.addEventListener('mousemove', (e) => {
                 if (isSpacebarDown && lastPanPoint) {
                     const currentPoint = new Point(e.clientX, e.clientY);
@@ -1040,8 +1311,11 @@
                     lastPanPoint = currentPoint;
                 }
             });
+
             window.addEventListener('mouseup', () => {
-                if (isSpacebarDown) document.body.style.cursor = 'grab';
+                if (isSpacebarDown) {
+                    paper.view.element.style.cursor = 'grab';
+                }
                 lastPanPoint = null;
             });
 
@@ -1075,38 +1349,81 @@
 
             window.addEventListener('keydown', (e) => {
                 if (e.target.tagName.toLowerCase() === 'input') return;
+
                 if (e.code === 'Space') {
                     e.preventDefault();
-                    isSpacebarDown = true;
-                    document.body.style.cursor = 'grab';
+                    if (!isSpacebarDown) {
+                        isSpacebarDown = true;
+                        paper.view.element.style.cursor = 'grab';
+                    }
                 }
+
+                // Lupa o Borrar Ancla con Alt (Corregido y sin duplicados)
+                if (e.key === 'Alt') {
+                    e.preventDefault();
+                    if (!isAltDown) {
+                        isAltDown = true;
+                        if (activeTool === 'pen') {
+                            // URL Data codificada de forma segura
+                            let svgIcon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' width='24' height='24'%3E%3Cpath d='M362.7 19.3L314.3 67.7 444.3 197.7l48.4-48.4c25-25 25-65.5 0-90.5L453.3 19.3c-25-25-65.5-25-90.5 0zm-71 71L58.6 323.5c-10.4 10.4-18 23.3-22.2 37.4L1 481.2C-1.5 489.7 .8 498.8 7 505s15.3 8.5 23.7 6.1l120.3-35.4c14.1-4.2 27-11.8 37.4-22.2L421.7 220.3 291.7 90.3z' fill='%231f2937' stroke='white' stroke-width='20'/%3E%3Crect x='300' y='360' width='180' height='60' fill='%23ef4444' rx='30' stroke='white' stroke-width='10'/%3E%3C/svg%3E";
+                            paper.view.element.style.cursor = `url("${svgIcon}") 0 24, auto`;
+                        } else {
+                            paper.view.element.style.cursor = 'zoom-in';
+                        }
+                    }
+                }
+
+                // Atajos de herramientas (Ctrl+G fue movido fuera para evitar conflictos)
                 if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
                 if (e.key.toLowerCase() === 'v') document.querySelector('[data-tool="select"]').click();
                 if (e.key.toLowerCase() === 'a') document.querySelector('[data-tool="direct"]').click();
                 if (e.key.toLowerCase() === 'p') document.querySelector('[data-tool="pen"]').click();
                 if (e.key.toLowerCase() === 'c' && e.shiftKey) document.querySelector('[data-tool="convert"]').click();
                 if (e.key.toLowerCase() === 't') document.querySelector('[data-tool="text"]').click();
+                if (e.key.toLowerCase() === 'o') document.querySelector('[data-tool="circle"]').click();
 
-                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-                    e.preventDefault();
-                    if (e.shiftKey) document.getElementById('btn-redo').click();
-                    else document.getElementById('btn-undo').click();
-                }
-                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
-                    e.preventDefault();
-                    document.getElementById('btn-redo').click();
-                }
+                // Atajos con Ctrl / Cmd
+                if (e.ctrlKey || e.metaKey) {
+                    let key = e.key.toLowerCase();
 
+                    // Deshacer / Rehacer
+                    if (key === 'z') {
+                        e.preventDefault();
+                        if (e.shiftKey) document.getElementById('btn-redo').click();
+                        else document.getElementById('btn-undo').click();
+                    }
+                    if (key === 'y') {
+                        e.preventDefault();
+                        document.getElementById('btn-redo').click();
+                    }
+                    // Agrupar / Desagrupar
+                    if (key === 'g') {
+                        e.preventDefault();
+                        if (e.shiftKey) document.getElementById('ctx-ungroup').click();
+                        else document.getElementById('ctx-group').click();
+                    }
+                }
             });
-
 
             window.addEventListener('keyup', (e) => {
                 if (e.code === 'Space') {
                     isSpacebarDown = false;
-                    document.body.style.cursor = 'default';
+                    paper.view.element.style.cursor = 'default';
                     lastPanPoint = null;
                 }
+
+                // Soltar Alt
+                if (e.key === 'Alt') {
+                    isAltDown = false;
+                    if (activeTool === 'pen') {
+                        paper.view.element.style.cursor = 'crosshair';
+                    } else {
+                        paper.view.element.style.cursor = 'default';
+                    }
+                }
             });
+
+
 
             const panel = document.getElementById('properties-panel');
             const noSelMsg = document.getElementById('no-selection-msg');
@@ -1442,6 +1759,115 @@
             };
 
 
+            // --- LÓGICA PARA COPIAR CÓDIGO SVG RESPONSIVO CON PREVIEW ---
+            const modalCopySvg = document.getElementById('modal-copy-svg');
+            const svgCodeArea = document.getElementById('svg-code-area');
+            const svgPreviewContainer = document.getElementById('svg-preview-container');
+            const btnCopySvg = document.getElementById('btn-copy-svg');
+            const btnModalSvgCopy = document.getElementById('modal-svg-copy-btn');
+            
+            const btnBgTransparent = document.getElementById('svg-bg-transparent');
+            const btnBgWhite = document.getElementById('svg-bg-white');
+            
+            let currentSvgIncludesBg = true;
+
+            function generateSVGCode() {
+                // 1. Preparar la vista (Ocultar UI y manejar el fondo)
+                project.deselectAll();
+                uiLayer.visible = false;
+                let oldShadow = bgRect.shadowColor;
+                let oldFill = bgRect.fillColor;
+                
+                bgRect.shadowColor = null; 
+                if (!currentSvgIncludesBg) {
+                    bgRect.fillColor = null; // Quitar fondo para que sea transparente
+                }
+                
+                updateUISelection();
+                drawBoundingBox();
+                paper.view.draw();
+
+                // 2. Exportar el SVG base
+                let svgData = project.exportSVG({
+                    asString: true,
+                    bounds: bgRect.bounds 
+                });
+
+                // 3. Restaurar la vista original inmediatamente
+                bgRect.fillColor = oldFill;
+                bgRect.shadowColor = oldShadow;
+                uiLayer.visible = true;
+                paper.view.draw();
+
+                // 4. Modificar el código SVG para hacerlo 100% responsivo
+                svgData = svgData.replace(/width="[^"]+"/, 'width="100%"');
+                svgData = svgData.replace(/height="[^"]+"/, 'height="100%"');
+
+                // 5. Envolver en un Div contenedor responsivo
+                let finalHTML = `<div class="vector-artwork" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden;">\n  ${svgData}\n</div>`;
+
+                // 6. Mostrar en el Modal (Código y Vista Previa)
+                svgCodeArea.value = finalHTML;
+                svgPreviewContainer.innerHTML = finalHTML;
+            }
+
+            // Al abrir el modal
+            btnCopySvg.addEventListener('click', () => {
+                generateSVGCode(); // Generar con la configuración actual
+                modalCopySvg.classList.remove('hidden');
+            });
+
+            // Botón: Sin Fondo (Transparente)
+            btnBgTransparent.addEventListener('click', () => {
+                currentSvgIncludesBg = false;
+                // Estilos activos
+                btnBgTransparent.classList.add('bg-blue-600', 'text-white', 'shadow');
+                btnBgTransparent.classList.remove('text-gray-400');
+                // Estilos inactivos
+                btnBgWhite.classList.remove('bg-blue-600', 'text-white', 'shadow');
+                btnBgWhite.classList.add('text-gray-400');
+                
+                generateSVGCode(); // Regenerar en vivo
+            });
+
+            // Botón: Con Fondo (Blanco)
+            btnBgWhite.addEventListener('click', () => {
+                currentSvgIncludesBg = true;
+                // Estilos activos
+                btnBgWhite.classList.add('bg-blue-600', 'text-white', 'shadow');
+                btnBgWhite.classList.remove('text-gray-400');
+                // Estilos inactivos
+                btnBgTransparent.classList.remove('bg-blue-600', 'text-white', 'shadow');
+                btnBgTransparent.classList.add('text-gray-400');
+                
+                generateSVGCode(); // Regenerar en vivo
+            });
+
+            // Cerrar el modal
+            document.getElementById('modal-svg-close').addEventListener('click', () => {
+                modalCopySvg.classList.add('hidden');
+            });
+
+            // Copiar al Portapapeles
+            btnModalSvgCopy.addEventListener('click', function() {
+                navigator.clipboard.writeText(svgCodeArea.value).then(() => {
+                    let originalHTML = this.innerHTML;
+                    this.innerHTML = '<i class="fa-solid fa-check"></i> ¡Copiado con éxito!';
+                    this.classList.replace('bg-blue-600', 'bg-green-600');
+                    this.classList.replace('hover:bg-blue-500', 'hover:bg-green-500');
+                    
+                    setTimeout(() => {
+                        this.innerHTML = originalHTML;
+                        this.classList.replace('bg-green-600', 'bg-blue-600');
+                        this.classList.replace('hover:bg-green-500', 'hover:bg-blue-500');
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Error al copiar: ', err);
+                    alert("No se pudo copiar el código al portapapeles.");
+                });
+            });
+
+
             // --- FASE 2: MENÚ CONTEXTUAL Y CAPAS ---
             const ctxMenu = document.getElementById('context-menu');
             const ctxLayersList = document.getElementById('ctx-layers-list');
@@ -1512,16 +1938,7 @@
                 updateUISelection(); drawBoundingBox(); paper.view.draw();
             });
 
-            // Atajos de teclado para Agrupar (Ctrl+G) y Desagrupar (Ctrl+Shift+G)
-            window.addEventListener('keydown', (e) => {
-                if (e.ctrlKey || e.metaKey) {
-                    if (e.key.toLowerCase() === 'g') {
-                        e.preventDefault();
-                        if (e.shiftKey) document.getElementById('ctx-ungroup').click();
-                        else document.getElementById('ctx-group').click();
-                    }
-                }
-            });
+
 
             // --- FASE 3: LÓGICA DE BUSCATRAZOS ---
             function applyPathfinder(operation) {
