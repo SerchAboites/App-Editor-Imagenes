@@ -112,6 +112,75 @@
             border: 1px solid #4b5563;
             border-radius: 4px;
         }
+
+        /* --- MOTOR DE ANIMACIONES CSS --- */
+        @keyframes fx-float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-15px);
+            }
+        }
+
+        @keyframes fx-pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        @keyframes fx-draw {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+
+        @keyframes fx-fadein {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* NUEVO: Animación de persecución infinita */
+        @keyframes fx-chase {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+
+        .anim-float {
+            animation: fx-float 3s ease-in-out infinite;
+            transform-origin: center;
+        }
+
+        .anim-pulse {
+            animation: fx-pulse 2s ease-in-out infinite;
+            transform-origin: center;
+        }
+
+        .anim-fadein {
+            animation: fx-fadein 1s ease-out forwards;
+            opacity: 0;
+        }
+
+        .anim-draw {
+            animation: fx-draw 2s ease-in-out forwards;
+        }
     </style>
 </head>
 
@@ -119,10 +188,18 @@
 
     <header
         class="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 shrink-0 z-10 shadow-md">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 border-r border-gray-700 pr-4">
             <i class="fa-solid fa-bezier-curve text-blue-400 text-xl"></i>
-            <h1 class="font-bold text-lg tracking-wide">VectorEditor <span
+            <h1 class="font-bold text-lg tracking-wide mr-2">VectorEditor <span
                     class="text-xs font-normal text-gray-400">Pro</span></h1>
+
+            <!-- NUEVO BOTÓN ABRIR ARCHIVO SVG -->
+            <div
+                class="relative overflow-hidden bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-2 text-gray-200 cursor-pointer shadow-sm ml-2">
+                <i class="fa-solid fa-folder-open text-yellow-400"></i> Abrir SVG
+                <input type="file" id="svg-upload" accept=".svg"
+                    class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+            </div>
         </div>
 
         <div class="flex items-center gap-4">
@@ -161,6 +238,11 @@
                 <button id="btn-copy-svg"
                     class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 text-purple-400 border border-purple-500/30">
                     <i class="fa-solid fa-code"></i> Copiar Código SVG
+                </button>
+
+                <button id="btn-open-animator"
+                    class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-sm font-medium transition flex items-center gap-1 text-pink-400 border border-pink-500/30 mr-2">
+                    <i class="fa-solid fa-film"></i> Animar
                 </button>
 
                 <button onclick="exportArt('svg')"
@@ -303,6 +385,23 @@
                             <button id="pf-exclude"
                                 class="bg-gray-700 hover:bg-gray-600 p-2 rounded text-gray-300 transition"
                                 title="Excluir"><i class="fa-solid fa-arrows-split-up-and-left"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Simplificar Trazado -->
+                    <div id="path-prop-group" class="hidden flex-col gap-2 pb-3 border-b border-gray-700">
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm text-gray-300"
+                                title="Reduce la cantidad de puntos de ancla">Simplificar (Nodos)</label>
+                            <span id="simplify-val"
+                                class="text-xs font-mono bg-gray-900 px-2 py-1 rounded text-gray-300">0</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="range" id="prop-simplify" min="0" max="50" step="1" value="0"
+                                class="w-full accent-blue-500">
+                            <button id="btn-simplify-auto"
+                                class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-xs font-bold text-white transition shadow"
+                                title="Cálculo Óptimo Automático">Auto</button>
                         </div>
                     </div>
 
@@ -458,30 +557,46 @@
             <div class="flex flex-1 gap-6 overflow-hidden">
                 <!-- Columna Izquierda: Opciones y Previsualizador -->
                 <div class="w-1/2 flex flex-col gap-4">
-                    <div class="bg-gray-900 p-3 rounded border border-gray-700 flex items-center justify-between shadow-inner">
+                    <div
+                        class="bg-gray-900 p-3 rounded border border-gray-700 flex items-center justify-between shadow-inner">
                         <span class="text-sm font-medium text-gray-300">Fondo del Artboard</span>
                         <div class="flex bg-gray-800 rounded-lg p-1 border border-gray-700">
-                            <button id="svg-bg-transparent" class="px-3 py-1.5 text-xs font-bold rounded-md text-gray-400 hover:text-white transition">Transparente</button>
-                            <button id="svg-bg-white" class="px-3 py-1.5 text-xs font-bold rounded-md bg-blue-600 text-white shadow transition">Blanco</button>
+                            <button id="svg-bg-transparent"
+                                class="px-3 py-1.5 text-xs font-bold rounded-md text-gray-400 hover:text-white transition">Transparente</button>
+                            <button id="svg-bg-white"
+                                class="px-3 py-1.5 text-xs font-bold rounded-md bg-blue-600 text-white shadow transition">Blanco</button>
                         </div>
                     </div>
-                    
-                    <div class="flex-1 border border-gray-700 rounded-lg overflow-hidden flex flex-col bg-gray-900 shadow-inner">
-                        <div class="text-xs text-gray-500 p-2 border-b border-gray-700 bg-gray-800 uppercase font-bold tracking-wider flex justify-between items-center">
+
+                    <div
+                        class="flex-1 border border-gray-700 rounded-lg overflow-hidden flex flex-col bg-gray-900 shadow-inner">
+                        <div
+                            class="text-xs text-gray-500 p-2 border-b border-gray-700 bg-gray-800 uppercase font-bold tracking-wider flex justify-between items-center">
                             <span>Vista Previa</span>
                             <!-- NUEVOS CONTROLES DE ESCENARIO -->
                             <div class="flex gap-1" id="scene-controls">
-                                <button class="scene-btn active px-2 py-1 bg-blue-600 text-white rounded text-[10px] transition" data-w="100%" data-h="100%" title="Contenedor Completo">100%</button>
-                                <button class="scene-btn px-2 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded text-[10px] transition" data-w="100%" data-h="120px" title="Simular un Banner Web">Banner</button>
-                                <button class="scene-btn px-2 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded text-[10px] transition" data-w="180px" data-h="100%" title="Simular Pantalla Móvil">Móvil</button>
-                                <button class="scene-btn px-2 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded text-[10px] transition" data-w="180px" data-h="180px" title="Simular una Tarjeta Cuadrada">Caja</button>
+                                <button
+                                    class="scene-btn active px-2 py-1 bg-blue-600 text-white rounded text-[10px] transition"
+                                    data-w="100%" data-h="100%" title="Contenedor Completo">100%</button>
+                                <button
+                                    class="scene-btn px-2 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded text-[10px] transition"
+                                    data-w="100%" data-h="120px" title="Simular un Banner Web">Banner</button>
+                                <button
+                                    class="scene-btn px-2 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded text-[10px] transition"
+                                    data-w="180px" data-h="100%" title="Simular Pantalla Móvil">Móvil</button>
+                                <button
+                                    class="scene-btn px-2 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded text-[10px] transition"
+                                    data-w="180px" data-h="180px" title="Simular una Tarjeta Cuadrada">Caja</button>
                             </div>
                         </div>
                         <!-- Fondo Ajedrezado centrado -->
-                        <div class="flex-1 w-full h-full relative p-4 flex items-center justify-center overflow-auto" style="background-image: linear-gradient(45deg, #374151 25%, transparent 25%, transparent 75%, #374151 75%, #374151), linear-gradient(45deg, #374151 25%, transparent 25%, transparent 75%, #374151 75%, #374151); background-size: 20px 20px; background-position: 0 0, 10px 10px;">
-                            
+                        <div class="flex-1 w-full h-full relative p-4 flex items-center justify-center overflow-auto"
+                            style="background-image: linear-gradient(45deg, #374151 25%, transparent 25%, transparent 75%, #374151 75%, #374151), linear-gradient(45deg, #374151 25%, transparent 25%, transparent 75%, #374151 75%, #374151); background-size: 20px 20px; background-position: 0 0, 10px 10px;">
+
                             <!-- EL CONTENEDOR PADRE SIMULADO (CON LÍNEAS VERDES VISIBLES) -->
-                            <div id="svg-preview-container" class="transition-all duration-300 border-2 border-dashed border-green-400 bg-black/30 shadow-2xl" style="width: 100%; height: 100%;">
+                            <div id="svg-preview-container"
+                                class="transition-all duration-300 border-2 border-dashed border-green-400 bg-black/30 shadow-2xl"
+                                style="width: 100%; height: 100%;">
                                 <!-- El código final del SVG se inyectará aquí adentro -->
                             </div>
 
@@ -507,6 +622,107 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal Animador (Estilo After Effects / Timeline) -->
+    <div id="modal-animator"
+        class="hidden fixed inset-0 bg-black/90 z-[60] flex items-center justify-center backdrop-blur-md p-4">
+        <div
+            class="bg-gray-800 border border-gray-700 rounded-lg shadow-2xl w-full max-w-7xl flex flex-col h-[95vh] overflow-hidden">
+
+            <!-- HEADER -->
+            <div class="flex justify-between items-center p-3 border-b border-gray-700 bg-gray-900">
+                <h3 class="text-sm font-bold text-white"><i class="fa-solid fa-film text-pink-400 mr-2"></i> Estudio de
+                    Animación SVG</h3>
+                <button id="modal-anim-close" class="text-gray-400 hover:text-white transition px-2">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- SECCIÓN SUPERIOR: PREVISUALIZADOR -->
+            <div class="flex-1 flex flex-col bg-gray-900 relative border-b border-gray-700">
+                <div class="absolute top-4 left-4 z-10 flex gap-2">
+                    <span
+                        class="bg-black/50 text-pink-400 border border-pink-500/30 px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm shadow-lg">Vista
+                        Previa</span>
+                </div>
+                <!-- Escenario de Ajedrez -->
+                <div class="flex-1 w-full h-full p-4 flex items-center justify-center overflow-auto"
+                    style="background-image: linear-gradient(45deg, #1f2937 25%, transparent 25%, transparent 75%, #1f2937 75%, #1f2937), linear-gradient(45deg, #1f2937 25%, transparent 25%, transparent 75%, #1f2937 75%, #1f2937); background-size: 20px 20px; background-position: 0 0, 10px 10px;">
+                    <div id="anim-preview-container"
+                        class="w-[800px] h-[600px] border-2 border-dashed border-gray-600 bg-black/20 flex-shrink-0">
+                        <!-- El SVG Animado va aquí -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN INFERIOR: LÍNEA DE TIEMPO (TIMELINE) -->
+            <div class="h-72 bg-gray-800 flex flex-col shrink-0">
+
+                <!-- Timeline Toolbar -->
+                <div class="h-10 bg-gray-900 border-b border-gray-700 flex items-center px-4 justify-between">
+                    <div class="flex items-center gap-4">
+                        <button id="btn-play-anim" class="text-pink-500 hover:text-pink-400 transition"><i
+                                class="fa-solid fa-play text-lg"></i></button>
+                        <button class="text-gray-400 hover:text-white transition"><i
+                                class="fa-solid fa-stop text-lg"></i></button>
+                        <div class="w-px h-5 bg-gray-700 mx-2"></div>
+                        <span
+                            class="text-xs font-mono text-gray-300 bg-black px-2 py-1 rounded border border-gray-700">00:00:00</span>
+                    </div>
+                </div>
+
+                <!-- Timeline Body -->
+                <div class="flex flex-1 overflow-hidden relative">
+
+                    <!-- Columna Izquierda: Nombres de Capas -->
+                    <div class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col z-10 shrink-0">
+                        <div
+                            class="h-6 border-b border-gray-700 bg-gray-900 flex items-center px-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                            Nombre de Capa
+                        </div>
+                        <div id="timeline-layers-list" class="flex-1 overflow-y-auto">
+                            <!-- JS inyecta las capas aquí -->
+                        </div>
+                    </div>
+
+                    <!-- Columna Derecha: Cuadrícula de Tiempo (Tracks) -->
+                    <div class="flex-1 bg-gray-900 overflow-auto relative" id="timeline-tracks-container">
+
+                        <!-- Regla de Tiempo (Ruler) Superior -->
+                        <div class="h-6 border-b border-gray-700 bg-gray-800 sticky top-0 z-20 flex"
+                            style="background-image: linear-gradient(90deg, #374151 1px, transparent 1px); background-size: 50px 100%;">
+                            <div class="w-[50px] shrink-0 text-[9px] text-gray-500 pl-1 pt-1 font-mono">0s</div>
+                            <div class="w-[50px] shrink-0 text-[9px] text-gray-500 pl-1 pt-1 font-mono">1s</div>
+                            <div class="w-[50px] shrink-0 text-[9px] text-gray-500 pl-1 pt-1 font-mono">2s</div>
+                            <div class="w-[50px] shrink-0 text-[9px] text-gray-500 pl-1 pt-1 font-mono">3s</div>
+                            <div class="w-[50px] shrink-0 text-[9px] text-gray-500 pl-1 pt-1 font-mono">4s</div>
+                            <div class="w-[50px] shrink-0 text-[9px] text-gray-500 pl-1 pt-1 font-mono">5s</div>
+                            <div class="w-[50px] shrink-0 text-[9px] text-gray-500 pl-1 pt-1 font-mono">6s</div>
+                            <div class="w-[50px] shrink-0 text-[9px] text-gray-500 pl-1 pt-1 font-mono">7s</div>
+                            <div class="w-[50px] shrink-0 text-[9px] text-gray-500 pl-1 pt-1 font-mono">8s</div>
+                        </div>
+
+                        <!-- Línea del Cabezal de Reproducción (Playhead) -->
+                        <div
+                            class="absolute top-0 bottom-0 left-[0px] w-px bg-pink-500 z-30 shadow-[0_0_8px_rgba(236,72,153,1)]">
+                            <div class="w-3 h-3 bg-pink-500 rounded-sm absolute -top-1 -left-[5px] transform rotate-45">
+                            </div>
+                        </div>
+
+                        <!-- Fondo con líneas de la cuadrícula -->
+                        <div class="absolute inset-0 top-6 pointer-events-none"
+                            style="background-image: linear-gradient(90deg, rgba(55,65,81,0.3) 1px, transparent 1px); background-size: 50px 100%;">
+                        </div>
+
+                        <!-- Contenedor donde JS inyectará las pistas reales -->
+                        <div id="dynamic-tracks" class="relative w-full"></div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 
     <script>
         paper.install(window);
@@ -1479,6 +1695,24 @@
                     panel.classList.add('flex');
                     noSelMsg.classList.add('hidden');
 
+
+                    // (Dentro de updateUISelection)
+
+                    // Mostrar Panel de Simplificar solo para Vectores (Path o CompoundPath)
+                    let isPath = selectedItems.length > 0 && selectedItems.every(i => i.className === 'Path' || i.className === 'CompoundPath' || i.className === 'Shape');
+
+                    const pathPropGroup = document.getElementById('path-prop-group');
+                    if (pathPropGroup) {
+                        pathPropGroup.classList.toggle('hidden', !isPath);
+                        pathPropGroup.classList.toggle('flex', isPath);
+                        // Reiniciar slider visualmente al cambiar de selección
+                        if (isPath) {
+                            document.getElementById('prop-simplify').value = 0;
+                            document.getElementById('simplify-val').textContent = '0';
+                        }
+                    }
+
+
                     // Check Type
                     textPropGroup.classList.toggle('hidden', !(item instanceof PointText));
                     textPropGroup.classList.toggle('flex', (item instanceof PointText));
@@ -1649,6 +1883,63 @@
                 e.target.value = ''; // Resetear el input
             });
 
+            // --- LÓGICA PARA IMPORTAR / ABRIR ARCHIVOS SVG ---
+            document.getElementById('svg-upload').addEventListener('change', function (e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // 1. Asegurar que los vectores caigan en una capa de dibujo (No en UI ni Fondo)
+                let targetLayer = project.activeLayer;
+                if (targetLayer.name === 'uiLayer' || targetLayer.name === 'background') {
+                    targetLayer = project.layers.find(l => l.name !== 'background' && l.name !== 'uiLayer') || project.layers['Capa 1'];
+                    targetLayer.activate();
+                }
+
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    const svgString = event.target.result;
+
+                    try {
+                        // 2. Paper.js importa el SVG y reconstruye las curvas y nodos
+                        let importedItem = project.importSVG(svgString, {
+                            expandShapes: true, // Convierte las formas base (rect/circle) en nodos editables
+                            insert: true        // Lo inserta automáticamente en la capa activa
+                        });
+
+                        if (importedItem) {
+                            // Si el SVG importado tiene un contenedor <svg> como grupo principal, 
+                            // a veces importa sus propias medidas. Lo centramos en tu Artboard blanco:
+                            importedItem.position = bgRect.bounds.center;
+                            
+                            // Seleccionar lo recién importado
+                            project.deselectAll();
+                            importedItem.selected = true;
+
+                            // Forzar el cambio a la herramienta de selección (V)
+                            document.querySelector('[data-tool="select"]').click();
+
+                            // Actualizar la interfaz (Capas y Panel Lateral)
+                            updateUISelection();
+                            drawBoundingBox();
+                            renderLayersUI();
+                            
+                            // Guardar en el historial para poder hacer Ctrl+Z
+                            saveState(); 
+                        }
+                    } catch (error) {
+                        console.error("Error al leer el archivo SVG: ", error);
+                        alert("Hubo un error al intentar abrir este archivo SVG. Puede que esté corrupto o contenga etiquetas no compatibles.");
+                    }
+                };
+                
+                // Leemos el SVG como texto (código) en lugar de como imagen DataURL
+                reader.readAsText(file);
+                
+                // Resetear el input para poder volver a cargar el mismo archivo si se desea
+                e.target.value = ''; 
+            });
+
+
             const modalVec = document.getElementById('modal-vectorize');
             document.getElementById('btn-vectorize').addEventListener('click', () => modalVec.classList.remove('hidden'));
             document.getElementById('vec-cancel').addEventListener('click', () => modalVec.classList.add('hidden'));
@@ -1767,10 +2058,10 @@
             const svgPreviewContainer = document.getElementById('svg-preview-container');
             const btnCopySvg = document.getElementById('btn-copy-svg');
             const btnModalSvgCopy = document.getElementById('modal-svg-copy-btn');
-            
+
             const btnBgTransparent = document.getElementById('svg-bg-transparent');
             const btnBgWhite = document.getElementById('svg-bg-white');
-            
+
             let currentSvgIncludesBg = true;
 
             function generateSVGCode() {
@@ -1779,12 +2070,12 @@
                 uiLayer.visible = false;
                 let oldShadow = bgRect.shadowColor;
                 let oldFill = bgRect.fillColor;
-                
-                bgRect.shadowColor = null; 
+
+                bgRect.shadowColor = null;
                 if (!currentSvgIncludesBg) {
                     bgRect.fillColor = null; // Quitar fondo para que sea transparente
                 }
-                
+
                 updateUISelection();
                 drawBoundingBox();
                 paper.view.draw();
@@ -1792,7 +2083,7 @@
                 // 2. Exportar el SVG base
                 let svgData = project.exportSVG({
                     asString: true,
-                    bounds: bgRect.bounds 
+                    bounds: bgRect.bounds
                 });
 
                 // 3. Restaurar la vista original inmediatamente
@@ -1828,7 +2119,7 @@
                 // Estilos inactivos
                 btnBgWhite.classList.remove('bg-blue-600', 'text-white', 'shadow');
                 btnBgWhite.classList.add('text-gray-400');
-                
+
                 generateSVGCode(); // Regenerar en vivo
             });
 
@@ -1841,7 +2132,7 @@
                 // Estilos inactivos
                 btnBgTransparent.classList.remove('bg-blue-600', 'text-white', 'shadow');
                 btnBgTransparent.classList.add('text-gray-400');
-                
+
                 generateSVGCode(); // Regenerar en vivo
             });
 
@@ -1851,13 +2142,13 @@
             });
 
             // Copiar al Portapapeles
-            btnModalSvgCopy.addEventListener('click', function() {
+            btnModalSvgCopy.addEventListener('click', function () {
                 navigator.clipboard.writeText(svgCodeArea.value).then(() => {
                     let originalHTML = this.innerHTML;
                     this.innerHTML = '<i class="fa-solid fa-check"></i> ¡Copiado con éxito!';
                     this.classList.replace('bg-blue-600', 'bg-green-600');
                     this.classList.replace('hover:bg-blue-500', 'hover:bg-green-500');
-                    
+
                     setTimeout(() => {
                         this.innerHTML = originalHTML;
                         this.classList.replace('bg-green-600', 'bg-blue-600');
@@ -2003,7 +2294,7 @@
 
             // --- LÓGICA DE ESCENARIOS DE VISTA PREVIA ---
             const sceneBtns = document.querySelectorAll('.scene-btn');
-            
+
             sceneBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
                     // Resetear estilos de todos los botones
@@ -2011,11 +2302,11 @@
                         b.classList.remove('bg-blue-600', 'text-white');
                         b.classList.add('bg-gray-700', 'text-gray-300');
                     });
-                    
+
                     // Activar el botón clicado
                     btn.classList.add('bg-blue-600', 'text-white');
                     btn.classList.remove('bg-gray-700', 'text-gray-300');
-                    
+
                     // Cambiar las dimensiones del contenedor punteado verde
                     svgPreviewContainer.style.width = btn.dataset.w;
                     svgPreviewContainer.style.height = btn.dataset.h;
@@ -2025,7 +2316,239 @@
 
             // Init Panels
             renderLayersUI();
-        };
+
+
+
+            // --- LÓGICA DE SIMPLIFICAR TRAZADO (REDUCIR NODOS) ---
+            const propSimplify = document.getElementById('prop-simplify');
+            const simplifyVal = document.getElementById('simplify-val');
+            const btnSimplifyAuto = document.getElementById('btn-simplify-auto');
+
+            let originalPathDataMap = new Map();
+
+            // 1. Guardar la forma original al hacer clic en el slider
+            propSimplify.addEventListener('mousedown', () => {
+                originalPathDataMap.clear();
+                project.selectedItems.forEach(item => {
+                    if (item.className === 'Path') {
+                        originalPathDataMap.set(item.id, item.pathData);
+                    } else if (item.className === 'CompoundPath') { // Soporte para trazados compuestos (Auto-vectorizados)
+                        item.children.forEach(child => {
+                            if (child.className === 'Path') originalPathDataMap.set(child.id, child.pathData);
+                        });
+                    }
+                });
+            });
+
+            // 2. Modificar en tiempo real mientras se arrastra
+            propSimplify.addEventListener('input', (e) => {
+                let val = parseInt(e.target.value);
+                simplifyVal.textContent = val;
+
+                // Convertimos el valor 0-50 a una tolerancia de 0 a 10 para el motor matemático
+                let tolerance = val / 5;
+
+                project.selectedItems.forEach(item => {
+                    if (item.className === 'Path' && originalPathDataMap.has(item.id)) {
+                        item.pathData = originalPathDataMap.get(item.id); // Restaurar base
+                        if (tolerance > 0) item.simplify(tolerance);      // Simplificar
+                    }
+                    else if (item.className === 'CompoundPath') {
+                        item.children.forEach(child => {
+                            if (child.className === 'Path' && originalPathDataMap.has(child.id)) {
+                                child.pathData = originalPathDataMap.get(child.id);
+                                if (tolerance > 0) child.simplify(tolerance);
+                            }
+                        });
+                    }
+                });
+
+                // Si tienes seleccionada la Herramienta Selección Directa (A), actualiza los nodos visuales
+                if (activeTool === 'direct') {
+                    updateUISelection();
+                }
+
+                drawBoundingBox();
+                paper.view.draw();
+            });
+
+            // 3. Al soltar, guardar en el historial (Ctrl+Z)
+            propSimplify.addEventListener('mouseup', () => {
+                originalPathDataMap.clear();
+                saveState();
+            });
+
+            // 4. Botón de Auto-Simplificar (Busca el punto óptimo)
+            btnSimplifyAuto.addEventListener('click', () => {
+                project.selectedItems.forEach(item => {
+                    // El método simplify() sin parámetros usa el algoritmo interno óptimo de Paper.js
+                    if (item.className === 'Path') {
+                        item.simplify();
+                    } else if (item.className === 'CompoundPath') {
+                        item.children.forEach(child => {
+                            if (child.className === 'Path') child.simplify();
+                        });
+                    }
+                });
+
+                if (activeTool === 'direct') updateUISelection();
+                drawBoundingBox();
+                paper.view.draw();
+                saveState();
+            });
+
+
+            // ==========================================
+            // LÓGICA DEL TIMELINE INTERACTIVO (ARRASTRABLE)
+            // ==========================================
+            const modalAnimator = document.getElementById('modal-animator');
+            const btnOpenAnimator = document.getElementById('btn-open-animator');
+            const btnCloseAnimator = document.getElementById('modal-anim-close');
+            const animLayersList = document.getElementById('timeline-layers-list');
+            const dynamicTracks = document.getElementById('dynamic-tracks');
+            const animPreviewContainer = document.getElementById('anim-preview-container');
+            const btnPlayAnim = document.getElementById('btn-play-anim');
+
+            let animationConfig = {};
+
+            btnOpenAnimator.addEventListener('click', () => {
+                animLayersList.innerHTML = '';
+                dynamicTracks.innerHTML = '';
+                animationConfig = {};
+
+                let validItems = project.activeLayer.children.filter(item =>
+                    item.className === 'Path' || item.className === 'Shape' || item.className === 'Group' || item.className === 'CompoundPath'
+                );
+
+                if (validItems.length === 0) {
+                    alert("Dibuja al menos un elemento vectorial para poder abrir la línea de tiempo.");
+                    return;
+                }
+
+                validItems.forEach((item, index) => {
+                    if (!item.name) item.name = `elemento_${index + 1}_${Date.now()}`;
+                    let id = item.name;
+
+                    // Configuramos 2 segundos de duración y un desfase inicial
+                    animationConfig[id] = { effect: 'fadein', duration: 2, delay: index * 0.5 };
+
+                    // DIBUJAR CAPA (IZQUIERDA)
+                    let layerRow = document.createElement('div');
+                    layerRow.className = 'border-b border-gray-700/50';
+                    layerRow.innerHTML = `
+                        <div class="h-8 flex items-center px-2 hover:bg-gray-700/30 cursor-pointer">
+                            <i class="fa-solid fa-layer-group text-pink-500 text-xs mr-2"></i>
+                            <span class="text-xs text-gray-200 font-medium select-none truncate w-full">${item.className} ${index + 1}</span>
+                        </div>
+                    `;
+                    animLayersList.appendChild(layerRow);
+
+                    // DIBUJAR PISTA ARRASTRABLE (DERECHA)
+                    // Fórmula: 50px equivale a 1 segundo
+                    let leftPos = animationConfig[id].delay * 50;
+                    let trackWidth = animationConfig[id].duration * 50;
+
+                    let trackRow = document.createElement('div');
+                    trackRow.className = 'relative w-full h-8 border-b border-gray-700/50';
+
+                    let block = document.createElement('div');
+                    block.className = 'absolute top-1.5 h-5 bg-blue-600/80 border border-blue-400 rounded-md cursor-grab hover:bg-blue-500 transition-colors shadow flex items-center justify-between px-1';
+                    block.style.left = leftPos + 'px';
+                    block.style.width = trackWidth + 'px';
+                    block.innerHTML = `
+                        <div class="w-1.5 h-3 bg-white/30 rounded pointer-events-none"></div>
+                        <span class="text-[9px] text-white font-bold select-none truncate px-1 pointer-events-none">Aparecer</span>
+                        <div class="w-1.5 h-3 bg-white/30 rounded pointer-events-none"></div>
+                    `;
+
+                    // LÓGICA DE ARRASTRE (DRAG & DROP)
+                    block.onmousedown = function (e) {
+                        e.preventDefault();
+                        let isDragging = true;
+                        let startX = e.clientX;
+                        let startLeft = parseFloat(block.style.left) || 0;
+
+                        block.classList.remove('cursor-grab', 'transition-colors');
+                        block.classList.add('cursor-grabbing');
+
+                        function onMouseMove(moveEvent) {
+                            if (!isDragging) return;
+                            let dx = moveEvent.clientX - startX;
+                            let newLeft = Math.max(0, startLeft + dx); // No dejar que cruce el 0s
+                            block.style.left = newLeft + 'px';
+
+                            // Guardar el nuevo retraso matemáticamente
+                            animationConfig[id].delay = newLeft / 50;
+                        }
+
+                        function onMouseUp() {
+                            isDragging = false;
+                            block.classList.remove('cursor-grabbing');
+                            block.classList.add('cursor-grab', 'transition-colors');
+                            document.removeEventListener('mousemove', onMouseMove);
+                            document.removeEventListener('mouseup', onMouseUp);
+
+                            // Al soltar el click, renderizamos la animación con los nuevos tiempos
+                            renderAnimationPreview();
+                        }
+
+                        document.addEventListener('mousemove', onMouseMove);
+                        document.addEventListener('mouseup', onMouseUp);
+                    };
+
+                    trackRow.appendChild(block);
+                    dynamicTracks.appendChild(trackRow);
+                });
+
+                modalAnimator.classList.remove('hidden');
+                renderAnimationPreview();
+            });
+
+            btnCloseAnimator.addEventListener('click', () => {
+                modalAnimator.classList.add('hidden');
+                animPreviewContainer.innerHTML = '';
+            });
+
+            btnPlayAnim.addEventListener('click', () => {
+                // Forzar un reinicio del SVG para que vuelva a reproducirse
+                let svgContent = animPreviewContainer.innerHTML;
+                animPreviewContainer.innerHTML = '';
+                setTimeout(() => { animPreviewContainer.innerHTML = svgContent; }, 10);
+            });
+
+            function renderAnimationPreview() {
+                project.deselectAll();
+                let svgString = project.exportSVG({ asString: true, bounds: bgRect.bounds });
+
+                let parser = new DOMParser();
+                let doc = parser.parseFromString(svgString, "image/svg+xml");
+                let svgNode = doc.documentElement;
+
+                svgNode.setAttribute('width', '100%');
+                svgNode.setAttribute('height', '100%');
+
+                let styleDef = document.createElementNS("http://www.w3.org/2000/svg", "style");
+                styleDef.textContent = `
+                    @keyframes fx-fadein { from { opacity: 0; transform: translateY(20px) scale(0.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
+                `;
+                svgNode.insertBefore(styleDef, svgNode.firstChild);
+
+                Object.keys(animationConfig).forEach(id => {
+                    let config = animationConfig[id];
+                    let el = svgNode.querySelector(`[id="${id}"]`);
+
+                    if (el) {
+                        // Se aplica el delay actualizado en el drag & drop
+                        let styleStr = `animation: fx-fadein ${config.duration}s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${config.delay}s; transform-origin: center; opacity: 0;`;
+                        el.setAttribute('style', (el.getAttribute('style') || '') + styleStr);
+                    }
+                });
+
+                animPreviewContainer.innerHTML = new XMLSerializer().serializeToString(svgNode);
+            }
+
+        }; // <--- AQUÍ ESTÁ EL CIERRE ORIGINAL DE WINDOW.ONLOAD
+
     </script>
 </body>
 
