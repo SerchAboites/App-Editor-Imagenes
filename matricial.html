@@ -18,6 +18,9 @@
     <!-- JSZip para descargar múltiples archivos -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
+    <!-- Paper.js para trazado vectorial matemático y curvas Bézier -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js"></script>
+
 
     <style>
         body {
@@ -141,6 +144,23 @@
         .is-circular-mode .cropper-face {
             border-radius: 50% !important;
         }
+
+        /* Estilos de las pestañas de herramientas */
+        .tool-tab.active {
+            background-color: #ffffff !important;
+            color: #4f46e5 !important;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1) !important;
+            border-color: #c7d2fe !important;
+        }
+
+        /* Modos de cursor en el área de trabajo */
+        .cursor-wand, .cursor-wand * {
+            cursor: crosshair !important;
+        }
+
+        .cursor-pen, .cursor-pen * {
+            cursor: crosshair !important;
+        }
     </style>
 </head>
 
@@ -186,12 +206,34 @@
             <div id="tools-section"
                 class="opacity-50 pointer-events-none transition-opacity duration-300 flex flex-col gap-5">
 
-                <!-- 2. Herramientas de Recorte -->
+                <!-- 2. Selector de Herramienta Principal -->
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">2. Recorte</label>
-                    <div class="flex gap-2 mb-2">
+                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Herramienta Activa</label>
+                    <div class="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-xl">
+                        <button id="tab-crop" type="button"
+                            class="tool-tab active py-2 px-1 text-xs font-semibold rounded-lg bg-white text-indigo-600 shadow-sm transition flex flex-col items-center gap-1 border border-indigo-200">
+                            <i class="fa-solid fa-crop-simple text-sm"></i>
+                            <span>Recorte</span>
+                        </button>
+                        <button id="tab-pen" type="button"
+                            class="tool-tab py-2 px-1 text-xs font-semibold rounded-lg text-gray-600 hover:text-indigo-600 hover:bg-white/50 transition flex flex-col items-center gap-1 border border-transparent">
+                            <i class="fa-solid fa-pen-nib text-sm"></i>
+                            <span>Pluma</span>
+                        </button>
+                        <button id="tab-wand" type="button"
+                            class="tool-tab py-2 px-1 text-xs font-semibold rounded-lg text-gray-600 hover:text-indigo-600 hover:bg-white/50 transition flex flex-col items-center gap-1 border border-transparent">
+                            <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+                            <span>Varita</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel 1: Herramientas de Recorte (Cropper) -->
+                <div id="panel-crop" class="tool-panel flex flex-col gap-3">
+                    <label class="block text-sm font-semibold text-gray-700">Proporciones de Recorte</label>
+                    <div class="flex gap-2">
                         <button id="btn-ratio-free"
-                            class="flex-1 py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition border-2 border-transparent">
+                            class="flex-1 py-1.5 px-2 bg-indigo-50 border-indigo-500 text-gray-700 rounded-md text-sm font-medium transition border-2">
                             <i class="fa-solid fa-crop-simple mr-1"></i> Libre
                         </button>
                         <button id="btn-ratio-square"
@@ -203,10 +245,135 @@
                             <i class="fa-regular fa-circle mr-1"></i> Círculo
                         </button>
                     </div>
-
                     <button id="btn-apply-crop"
                         class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition shadow-md flex items-center justify-center gap-2">
                         <i class="fa-solid fa-check"></i> Aplicar Recorte
+                    </button>
+                </div>
+
+                <!-- Panel 2: Herramienta Pluma Vectorial (Paper.js) -->
+                <div id="panel-pen" class="tool-panel hidden flex flex-col gap-3">
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-semibold text-gray-700">Pluma Vectorial (Bézier)</label>
+                            <span id="pen-status-badge" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">Lienzo Listo</span>
+                        </div>
+                        <p class="text-xs text-gray-500 leading-relaxed">
+                            Haz clic sobre la imagen para añadir anclas y arrastra para curvar. Cierra el trazado tocando el punto inicial.
+                        </p>
+                    </div>
+
+                    <!-- Estadísticas de Nodos -->
+                    <div class="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-200 text-xs">
+                        <span class="text-gray-600 font-medium">Nodos trazados:</span>
+                        <span id="pen-node-count" class="font-bold text-indigo-600 font-mono">0</span>
+                    </div>
+
+                    <!-- Botones de Edición del Trazado -->
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <button id="btn-pen-close" type="button"
+                            class="py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs font-medium transition flex items-center justify-center gap-1 opacity-50 cursor-not-allowed"
+                            disabled title="Cerrar bucle del trazado">
+                            <i class="fa-solid fa-circle-nodes"></i> Cerrar
+                        </button>
+                        <button id="btn-pen-undo-node" type="button"
+                            class="py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs font-medium transition flex items-center justify-center gap-1 opacity-50 cursor-not-allowed"
+                            disabled title="Deshacer último nodo">
+                            <i class="fa-solid fa-rotate-left"></i> Deshacer
+                        </button>
+                        <button id="btn-pen-clear" type="button"
+                            class="py-1.5 px-2 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-700 rounded text-xs font-medium transition flex items-center justify-center gap-1"
+                            title="Borrar trazado actual">
+                            <i class="fa-solid fa-trash-can"></i> Limpiar
+                        </button>
+                    </div>
+
+                    <!-- Acciones de Selección de Píxeles -->
+                    <div class="pt-2 border-t border-gray-200 flex flex-col gap-2">
+                        <label class="block text-xs font-bold text-gray-600 uppercase tracking-wider">Hacer Selección de Píxeles</label>
+                        <button id="btn-pen-crop-keep" type="button"
+                            class="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium transition shadow-md flex items-center justify-center gap-2 opacity-50 cursor-not-allowed"
+                            disabled>
+                            <i class="fa-solid fa-scissors"></i> Recortar Objeto (Aislar)
+                        </button>
+                        <button id="btn-pen-crop-remove" type="button"
+                            class="w-full py-2 px-3 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium transition shadow-md flex items-center justify-center gap-2 opacity-50 cursor-not-allowed"
+                            disabled>
+                            <i class="fa-solid fa-eraser"></i> Borrar Interior (Hueco)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel 3: Varita Mágica (Quitar Fondo estilo Photoshop) -->
+                <div id="panel-wand" class="tool-panel hidden flex flex-col gap-3">
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-sm font-semibold text-gray-700">Varita Mágica</label>
+                            <span id="wand-active-indicator" class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">Clic activo</span>
+                        </div>
+                        <p class="text-xs text-gray-500">
+                            Haz clic en cualquier píxel de la imagen para seleccionar el color a eliminar.
+                        </p>
+                    </div>
+
+                    <!-- Muestra y Selección de Color -->
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 flex flex-col gap-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-gray-600">Color Seleccionado:</span>
+                            <button id="btn-sample-corner" type="button" class="text-xs text-indigo-600 hover:underline flex items-center gap-1">
+                                <i class="fa-solid fa-arrow-pointer"></i> Esquina (0,0)
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="relative">
+                                <div id="wand-color-swatch" class="w-10 h-10 rounded-lg border-2 border-gray-300 shadow-inner bg-white"></div>
+                                <input type="color" id="wand-color-input" value="#ffffff" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+                            </div>
+                            <div class="flex-1 flex flex-col">
+                                <span id="wand-hex-text" class="text-xs font-mono font-bold text-gray-800">#FFFFFF</span>
+                                <span id="wand-rgb-text" class="text-[11px] font-mono text-gray-500">RGB(255, 255, 255)</span>
+                            </div>
+                            <button id="btn-pick-eyedropper" type="button" class="hidden p-2 rounded-md bg-white border border-gray-300 text-gray-600 hover:text-indigo-600 hover:border-indigo-400 text-xs shadow-sm" title="Cuentagotas de pantalla">
+                                <i class="fa-solid fa-eye-dropper"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Control de Tolerancia -->
+                    <div>
+                        <div class="flex justify-between text-xs text-gray-600 mb-1">
+                            <span>Tolerancia de color:</span>
+                            <span id="tolerance-val" class="font-bold text-indigo-600 font-mono">30</span>
+                        </div>
+                        <input type="range" id="tolerance-slider" min="0" max="150" value="30">
+                    </div>
+
+                    <!-- Modo de Cobertura (Contiguo vs Global) -->
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1.5">Modo de Selección:</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="btn-mode-contiguous" type="button"
+                                class="py-1.5 px-2 bg-indigo-50 border-2 border-indigo-500 text-indigo-700 rounded-md text-xs font-medium transition flex items-center justify-center gap-1"
+                                title="Elimina sólo el área continua conectada al color seleccionado (Como Varita Mágica de Photoshop)">
+                                <i class="fa-solid fa-clone"></i> Contiguo
+                            </button>
+                            <button id="btn-mode-global" type="button"
+                                class="py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs font-medium transition border-2 border-transparent flex items-center justify-center gap-1"
+                                title="Elimina todos los píxeles de este color en toda la imagen">
+                                <i class="fa-solid fa-globe"></i> Global
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Opción auto-aplicar al hacer clic -->
+                    <label class="flex items-center gap-2 cursor-pointer mt-1">
+                        <input type="checkbox" id="wand-auto-apply" checked class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500">
+                        <span class="text-xs text-gray-600 font-medium">Eliminar fondo al hacer clic</span>
+                    </label>
+
+                    <button id="btn-execute-wand" type="button"
+                        class="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium transition shadow-md flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Eliminar Color Seleccionado
                     </button>
                 </div>
 
@@ -228,25 +395,6 @@
                     <button id="btn-apply-resolution"
                         class="w-full py-2 px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-sm font-medium transition shadow-md flex items-center justify-center gap-2">
                         <i class="fa-solid fa-expand"></i> Escalar Canvas
-                    </button>
-                </div>
-
-                <!-- 4. Removedor de Fondo -->
-                <div class="border-t border-gray-200 pt-4">
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">4. Quitar Fondo (Color
-                        esquina)</label>
-
-                    <div class="mb-2 mt-2">
-                        <div class="flex justify-between text-xs text-gray-600 mb-1">
-                            <span>Tolerancia:</span>
-                            <span id="tolerance-val">30</span>
-                        </div>
-                        <input type="range" id="tolerance-slider" min="0" max="150" value="30">
-                    </div>
-
-                    <button id="btn-remove-bg"
-                        class="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium transition shadow-md flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-eraser"></i> Ejecutar Mágia
                     </button>
                 </div>
 
@@ -316,11 +464,13 @@
 
         <!-- Contenedor donde operará Cropper (ocupa todo el espacio disponible) -->
         <div id="workspace-container"
-            class="w-full h-full p-4 md:p-10 flex items-center justify-center hidden opacity-0 transition-opacity duration-500 z-10 box-border">
-            <div class="img-container">
+            class="w-full h-full p-4 md:p-10 flex items-center justify-center hidden opacity-0 transition-opacity duration-500 z-10 box-border relative">
+            <div class="img-container relative">
                 <!-- La imagen recibe el checkerboard internamente por CSS al volverse cropper-canvas -->
                 <img id="image-workspace" src="" alt="Workspace">
             </div>
+            <!-- Canvas superpuesto para la Pluma Vectorial (Paper.js) -->
+            <canvas id="pen-canvas" class="hidden absolute z-30 pointer-events-auto"></canvas>
         </div>
 
         <!-- Canvas oculto para procesamientos y redimensionado -->
@@ -346,16 +496,47 @@
         const toolsSection = document.getElementById('tools-section');
         const processingCanvas = document.getElementById('processing-canvas');
 
-        // Botones UI
+        // Botones UI Recorte
         const btnRatioFree = document.getElementById('btn-ratio-free');
         const btnRatioSquare = document.getElementById('btn-ratio-square');
         const btnRatioCircle = document.getElementById('btn-ratio-circle');
         const btnApplyCrop = document.getElementById('btn-apply-crop');
         const btnApplyResolution = document.getElementById('btn-apply-resolution');
-        const btnRemoveBg = document.getElementById('btn-remove-bg');
         const btnExportPng = document.getElementById('btn-export-png');
         const btnExportJpg = document.getElementById('btn-export-jpg');
         const btnExportWebp = document.getElementById('btn-export-webp');
+
+        // Pestañas y Paneles
+        const tabCrop = document.getElementById('tab-crop');
+        const tabPen = document.getElementById('tab-pen');
+        const tabWand = document.getElementById('tab-wand');
+        const panelCrop = document.getElementById('panel-crop');
+        const panelPen = document.getElementById('panel-pen');
+        const panelWand = document.getElementById('panel-wand');
+
+        // Elementos Pluma (Paper.js)
+        const penCanvas = document.getElementById('pen-canvas');
+        const penNodeCount = document.getElementById('pen-node-count');
+        const penStatusBadge = document.getElementById('pen-status-badge');
+        const btnPenClose = document.getElementById('btn-pen-close');
+        const btnPenUndoNode = document.getElementById('btn-pen-undo-node');
+        const btnPenClear = document.getElementById('btn-pen-clear');
+        const btnPenCropKeep = document.getElementById('btn-pen-crop-keep');
+        const btnPenCropRemove = document.getElementById('btn-pen-crop-remove');
+
+        // Elementos Varita Mágica
+        const wandColorSwatch = document.getElementById('wand-color-swatch');
+        const wandColorInput = document.getElementById('wand-color-input');
+        const wandHexText = document.getElementById('wand-hex-text');
+        const wandRgbText = document.getElementById('wand-rgb-text');
+        const btnSampleCorner = document.getElementById('btn-sample-corner');
+        const btnPickEyedropper = document.getElementById('btn-pick-eyedropper');
+        const toleranceSlider = document.getElementById('tolerance-slider');
+        const toleranceVal = document.getElementById('tolerance-val');
+        const btnModeContiguous = document.getElementById('btn-mode-contiguous');
+        const btnModeGlobal = document.getElementById('btn-mode-global');
+        const wandAutoApply = document.getElementById('wand-auto-apply');
+        const btnExecuteWand = document.getElementById('btn-execute-wand');
 
         // Botones Historial
         const btnUndo = document.getElementById('btn-undo');
@@ -364,12 +545,11 @@
         // Inputs
         const inputWidth = document.getElementById('input-width');
         const inputHeight = document.getElementById('input-height');
-        const toleranceSlider = document.getElementById('tolerance-slider');
-        const toleranceVal = document.getElementById('tolerance-val');
 
         let cropper = null;
         let currentFilename = "imagen_editada";
         let isCircularCrop = false;
+        let activeTool = 'crop'; // 'crop', 'pen', 'wand'
 
         // ==========================================
         // SISTEMA DE HISTORIAL (DESHACER / REHACER)
@@ -421,6 +601,7 @@
             if (cropper) {
                 cropper.replace(dataUrl);
                 updateHistoryButtons();
+                if (typeof clearPenPath === 'function') clearPenPath();
             }
         }
 
@@ -459,6 +640,8 @@
 
                     initCropper();
                     setRatioButtonActive(btnRatioFree);
+                    setTool('crop');
+                    if (typeof clearPenPath === 'function') clearPenPath();
 
                     // Guardar el estado inicial en el historial
                     saveState(dataUrl);
@@ -488,6 +671,14 @@
                     const imgData = cropper.getImageData();
                     inputWidth.value = Math.round(imgData.naturalWidth);
                     inputHeight.value = Math.round(imgData.naturalHeight);
+
+                    setupWorkspaceListeners();
+                    if (activeTool === 'pen') {
+                        syncPenCanvas();
+                    } else if (activeTool === 'wand') {
+                        cropper.clear();
+                        cropper.setDragMode('none');
+                    }
                 }
             });
         }
@@ -623,58 +814,601 @@
             showToast(`Resolución ajustada a ${targetWidth}x${targetHeight}`);
         });
 
-        // 4. Removedor de Fondo
+        // ==========================================
+        // SISTEMA DE HERRAMIENTAS Y PESTAÑAS
+        // ==========================================
+        function setTool(toolName) {
+            activeTool = toolName;
+
+            // Actualizar apariencia de las pestañas
+            [tabCrop, tabPen, tabWand].forEach(tab => {
+                tab.classList.remove('active', 'bg-white', 'text-indigo-600', 'shadow-sm', 'border-indigo-200');
+                tab.classList.add('text-gray-600', 'border-transparent');
+            });
+
+            const activeTab = toolName === 'crop' ? tabCrop : (toolName === 'pen' ? tabPen : tabWand);
+            activeTab.classList.add('active', 'bg-white', 'text-indigo-600', 'shadow-sm', 'border-indigo-200');
+            activeTab.classList.remove('text-gray-600', 'border-transparent');
+
+            // Mostrar / Ocultar Paneles
+            panelCrop.classList.toggle('hidden', toolName !== 'crop');
+            panelPen.classList.toggle('hidden', toolName !== 'pen');
+            panelWand.classList.toggle('hidden', toolName !== 'wand');
+
+            const container = workspaceContainer.querySelector('.cropper-container');
+
+            if (toolName === 'crop') {
+                if (penCanvas) penCanvas.classList.add('hidden');
+                if (container) {
+                    container.classList.remove('cursor-wand', 'cursor-pen');
+                    if (cropper) {
+                        cropper.crop();
+                        cropper.setDragMode('crop');
+                    }
+                }
+            } else if (toolName === 'pen') {
+                if (cropper) {
+                    cropper.clear(); // Ocultar caja de recorte rectangular
+                    cropper.setDragMode('none');
+                }
+                if (container) {
+                    container.classList.remove('cursor-wand');
+                    container.classList.add('cursor-pen');
+                }
+                syncPenCanvas();
+            } else if (toolName === 'wand') {
+                if (penCanvas) penCanvas.classList.add('hidden');
+                if (cropper) {
+                    cropper.clear();
+                    cropper.setDragMode('none');
+                }
+                if (container) {
+                    container.classList.remove('cursor-pen');
+                    container.classList.add('cursor-wand');
+                }
+            }
+        }
+
+        tabCrop.addEventListener('click', () => setTool('crop'));
+        tabPen.addEventListener('click', () => setTool('pen'));
+        tabWand.addEventListener('click', () => setTool('wand'));
+
+        // ==========================================
+        // HERRAMIENTA PLUMA VECTORIAL (PAPER.JS)
+        // ==========================================
+        let penToolInstance = null;
+        let penPath = null;
+        let activeDragSegment = null;
+
+        function syncPenCanvas() {
+            if (!cropper) return;
+            const cropperContainer = workspaceContainer.querySelector('.cropper-container');
+            if (!cropperContainer) return;
+
+            const wsRect = workspaceContainer.getBoundingClientRect();
+            const crRect = cropperContainer.getBoundingClientRect();
+
+            penCanvas.classList.remove('hidden');
+            penCanvas.style.position = 'absolute';
+            penCanvas.style.left = (crRect.left - wsRect.left) + 'px';
+            penCanvas.style.top = (crRect.top - wsRect.top) + 'px';
+            penCanvas.style.width = crRect.width + 'px';
+            penCanvas.style.height = crRect.height + 'px';
+            penCanvas.width = crRect.width;
+            penCanvas.height = crRect.height;
+
+            if (!paper.project) {
+                paper.setup(penCanvas);
+                setupPenTool();
+            } else {
+                paper.view.viewSize = new paper.Size(penCanvas.width, penCanvas.height);
+                paper.view.draw();
+            }
+        }
+
+        function setupPenTool() {
+            penToolInstance = new paper.Tool();
+
+            penToolInstance.onMouseDown = function (event) {
+                if (activeTool !== 'pen') return;
+
+                // Si ya hay al menos 3 nodos y hace clic cerca del primer nodo, cerrar el trazado
+                if (penPath && penPath.segments.length >= 3 && !penPath.closed) {
+                    const firstPoint = penPath.segments[0].point;
+                    if (event.point.getDistance(firstPoint) < 14) {
+                        penPath.closed = true;
+                        penPath.fillColor = 'rgba(79, 70, 229, 0.25)';
+                        updatePenUI();
+                        paper.view.draw();
+                        return;
+                    }
+                }
+
+                // Si ya estaba cerrado, iniciar uno nuevo
+                if (penPath && penPath.closed) {
+                    penPath.remove();
+                    penPath = null;
+                }
+
+                if (!penPath) {
+                    penPath = new paper.Path();
+                    penPath.strokeColor = '#00f3ff'; // Cian neón brillante
+                    penPath.strokeWidth = 2.5;
+                    penPath.selected = true; // Paper.js dibuja automáticamente anclas y manejadores
+                }
+
+                activeDragSegment = penPath.add(event.point);
+                updatePenUI();
+                paper.view.draw();
+            };
+
+            penToolInstance.onMouseDrag = function (event) {
+                if (activeTool !== 'pen' || !activeDragSegment) return;
+                const delta = event.point.subtract(activeDragSegment.point);
+                activeDragSegment.handleOut = delta;
+                activeDragSegment.handleIn = delta.multiply(-1);
+                paper.view.draw();
+            };
+
+            penToolInstance.onMouseUp = function () {
+                activeDragSegment = null;
+                paper.view.draw();
+            };
+
+            penToolInstance.onMouseMove = function (event) {
+                if (activeTool !== 'pen') return;
+                if (penPath && penPath.segments.length >= 3 && !penPath.closed) {
+                    const firstPoint = penPath.segments[0].point;
+                    if (event.point.getDistance(firstPoint) < 14) {
+                        penCanvas.style.cursor = 'pointer';
+                        return;
+                    }
+                }
+                penCanvas.style.cursor = 'crosshair';
+            };
+        }
+
+        function updatePenUI() {
+            const count = penPath ? penPath.segments.length : 0;
+            const isClosed = penPath ? penPath.closed : false;
+
+            penNodeCount.innerText = count;
+
+            if (isClosed) {
+                penStatusBadge.innerText = "Trazado Cerrado";
+                penStatusBadge.className = "text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-bold";
+            } else if (count > 0) {
+                penStatusBadge.innerText = "Trazando...";
+                penStatusBadge.className = "text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium";
+            } else {
+                penStatusBadge.innerText = "Lienzo Listo";
+                penStatusBadge.className = "text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium";
+            }
+
+            const canSelect = count >= 3;
+            btnPenCropKeep.disabled = !canSelect;
+            btnPenCropRemove.disabled = !canSelect;
+            btnPenClose.disabled = !canSelect || isClosed;
+            btnPenUndoNode.disabled = count === 0;
+
+            btnPenCropKeep.classList.toggle('opacity-50', !canSelect);
+            btnPenCropKeep.classList.toggle('cursor-not-allowed', !canSelect);
+            btnPenCropRemove.classList.toggle('opacity-50', !canSelect);
+            btnPenCropRemove.classList.toggle('cursor-not-allowed', !canSelect);
+            btnPenClose.classList.toggle('opacity-50', !canSelect || isClosed);
+            btnPenClose.classList.toggle('cursor-not-allowed', !canSelect || isClosed);
+            btnPenUndoNode.classList.toggle('opacity-50', count === 0);
+            btnPenUndoNode.classList.toggle('cursor-not-allowed', count === 0);
+        }
+
+        btnPenClose.addEventListener('click', () => {
+            if (penPath && penPath.segments.length >= 3 && !penPath.closed) {
+                penPath.closed = true;
+                penPath.fillColor = 'rgba(79, 70, 229, 0.25)';
+                updatePenUI();
+                paper.view.draw();
+                showToast("Trazado cerrado. Listo para seleccionar píxeles.");
+            }
+        });
+
+        btnPenUndoNode.addEventListener('click', () => {
+            if (penPath && penPath.segments.length > 0) {
+                penPath.removeSegment(penPath.segments.length - 1);
+                if (penPath.segments.length === 0) {
+                    penPath.remove();
+                    penPath = null;
+                } else if (penPath.closed) {
+                    penPath.closed = false;
+                    penPath.fillColor = null;
+                }
+                updatePenUI();
+                paper.view.draw();
+            }
+        });
+
+        function clearPenPath() {
+            if (penPath) {
+                penPath.remove();
+                penPath = null;
+            }
+            updatePenUI();
+            if (paper.view) paper.view.draw();
+        }
+        btnPenClear.addEventListener('click', clearPenPath);
+
+        btnPenCropKeep.addEventListener('click', () => applyPenSelection('keep_inside'));
+        btnPenCropRemove.addEventListener('click', () => applyPenSelection('remove_inside'));
+
+        async function applyPenSelection(action) {
+            if (!cropper || !penPath || penPath.segments.length < 3) {
+                showToast("Traza al menos 3 puntos para poder seleccionar píxeles.");
+                return;
+            }
+
+            if (!penPath.closed) {
+                penPath.closed = true;
+                penPath.fillColor = 'rgba(79, 70, 229, 0.25)';
+                if (paper.view) paper.view.draw();
+            }
+
+            showToast("Procesando selección de píxeles...");
+
+            const imgData = cropper.getImageData();
+            const canvasData = cropper.getCanvasData();
+            const naturalW = Math.round(imgData.naturalWidth);
+            const naturalH = Math.round(imgData.naturalHeight);
+
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = naturalW;
+            offCanvas.height = naturalH;
+            const offCtx = offCanvas.getContext('2d');
+
+            const img = new Image();
+            img.src = historyStates[currentStateIndex];
+            await new Promise((res, rej) => {
+                img.onload = res;
+                img.onerror = rej;
+            });
+
+            const mapX = x => ((x - canvasData.left) / canvasData.width) * naturalW;
+            const mapY = y => ((y - canvasData.top) / canvasData.height) * naturalH;
+            const mapDeltaX = dx => (dx / canvasData.width) * naturalW;
+            const mapDeltaY = dy => (dy / canvasData.height) * naturalH;
+
+            offCtx.beginPath();
+            const segs = penPath.segments;
+            const startX = mapX(segs[0].point.x);
+            const startY = mapY(segs[0].point.y);
+            offCtx.moveTo(startX, startY);
+
+            for (let i = 0; i < segs.length; i++) {
+                const s1 = segs[i];
+                const s2 = (i === segs.length - 1) ? segs[0] : segs[i + 1];
+
+                const p1x = mapX(s1.point.x);
+                const p1y = mapY(s1.point.y);
+                const p2x = mapX(s2.point.x);
+                const p2y = mapY(s2.point.y);
+
+                const cp1x = p1x + mapDeltaX(s1.handleOut.x);
+                const cp1y = p1y + mapDeltaY(s1.handleOut.y);
+                const cp2x = p2x + mapDeltaX(s2.handleIn.x);
+                const cp2y = p2y + mapDeltaY(s2.handleIn.y);
+
+                offCtx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2x, p2y);
+            }
+            offCtx.closePath();
+
+            if (action === 'keep_inside') {
+                offCtx.save();
+                offCtx.clip();
+                offCtx.drawImage(img, 0, 0, naturalW, naturalH);
+                offCtx.restore();
+            } else {
+                offCtx.drawImage(img, 0, 0, naturalW, naturalH);
+                offCtx.save();
+                offCtx.globalCompositeOperation = 'destination-out';
+                offCtx.fill();
+                offCtx.restore();
+            }
+
+            const newUrl = offCanvas.toDataURL('image/png');
+            clearPenPath();
+            cropper.replace(newUrl);
+            saveState(newUrl);
+
+            showToast(action === 'keep_inside' ? "¡Objeto aislado por trazado vectorial!" : "¡Píxeles interiores eliminados!");
+        }
+
+        // ==========================================
+        // VARITA MÁGICA (QUITAR FONDO POR COLOR)
+        // ==========================================
+        let selectedWandColor = { r: 255, g: 255, b: 255 };
+        let wandMode = 'contiguous'; // 'contiguous' | 'global'
+        let lastWandCoord = null;
+
+        function updateWandColor(r, g, b) {
+            selectedWandColor = { r, g, b };
+            const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+            wandColorSwatch.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+            wandColorInput.value = hex;
+            wandHexText.innerText = hex.toUpperCase();
+            wandRgbText.innerText = `RGB(${r}, ${g}, ${b})`;
+        }
+
+        wandColorInput.addEventListener('input', (e) => {
+            const hex = e.target.value;
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            updateWandColor(r, g, b);
+        });
+
+        if (window.EyeDropper) {
+            btnPickEyedropper.classList.remove('hidden');
+            btnPickEyedropper.addEventListener('click', async () => {
+                try {
+                    const ed = new EyeDropper();
+                    const res = await ed.open();
+                    const hex = res.sRGBHex;
+                    const r = parseInt(hex.slice(1, 3), 16);
+                    const g = parseInt(hex.slice(3, 5), 16);
+                    const b = parseInt(hex.slice(5, 7), 16);
+                    updateWandColor(r, g, b);
+                    showToast(`Color muestreado: ${hex.toUpperCase()}`);
+                } catch (e) {
+                    // Cancelado por el usuario
+                }
+            });
+        }
+
+        btnModeContiguous.addEventListener('click', () => {
+            wandMode = 'contiguous';
+            btnModeContiguous.className = 'py-1.5 px-2 bg-indigo-50 border-2 border-indigo-500 text-indigo-700 rounded-md text-xs font-medium transition flex items-center justify-center gap-1';
+            btnModeGlobal.className = 'py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs font-medium transition border-2 border-transparent flex items-center justify-center gap-1';
+        });
+
+        btnModeGlobal.addEventListener('click', () => {
+            wandMode = 'global';
+            btnModeGlobal.className = 'py-1.5 px-2 bg-indigo-50 border-2 border-indigo-500 text-indigo-700 rounded-md text-xs font-medium transition flex items-center justify-center gap-1';
+            btnModeContiguous.className = 'py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs font-medium transition border-2 border-transparent flex items-center justify-center gap-1';
+        });
+
+        btnSampleCorner.addEventListener('click', () => {
+            if (!cropper) return;
+            const canvas = cropper.getCroppedCanvas();
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const pixel = ctx.getImageData(0, 0, 1, 1).data;
+            updateWandColor(pixel[0], pixel[1], pixel[2]);
+            lastWandCoord = { x: 0, y: 0 };
+            showToast(`Color de esquina tomado: RGB(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`);
+        });
+
         toleranceSlider.addEventListener('input', (e) => {
             toleranceVal.innerText = e.target.value;
         });
 
-        btnRemoveBg.addEventListener('click', () => {
+        function setupWorkspaceListeners() {
+            const container = workspaceContainer.querySelector('.cropper-container');
+            if (!container) return;
+
+            container.removeEventListener('click', handleWorkspaceClick);
+            container.addEventListener('click', handleWorkspaceClick);
+        }
+
+        function handleWorkspaceClick(e) {
+            if (activeTool !== 'wand' || !cropper) return;
+
+            const cropperContainer = workspaceContainer.querySelector('.cropper-container');
+            if (!cropperContainer) return;
+
+            const rect = cropperContainer.getBoundingClientRect();
+            const canvasData = cropper.getCanvasData();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            const relX = (clickX - canvasData.left) / canvasData.width;
+            const relY = (clickY - canvasData.top) / canvasData.height;
+
+            if (relX < 0 || relX > 1 || relY < 0 || relY > 1) return;
+
+            const naturalW = Math.round(cropper.getImageData().naturalWidth);
+            const naturalH = Math.round(cropper.getImageData().naturalHeight);
+
+            const px = Math.min(Math.max(0, Math.floor(relX * naturalW)), naturalW - 1);
+            const py = Math.min(Math.max(0, Math.floor(relY * naturalH)), naturalH - 1);
+            lastWandCoord = { x: px, y: py };
+
+            const ctx = processingCanvas.getContext('2d');
+            processingCanvas.width = naturalW;
+            processingCanvas.height = naturalH;
+
+            const img = new Image();
+            img.src = historyStates[currentStateIndex];
+            img.onload = () => {
+                ctx.clearRect(0, 0, naturalW, naturalH);
+                ctx.drawImage(img, 0, 0);
+
+                const pixel = ctx.getImageData(px, py, 1, 1).data;
+                if (pixel[3] === 0) {
+                    showToast("Este píxel ya es transparente. Haz clic en un área con color.");
+                    return;
+                }
+
+                updateWandColor(pixel[0], pixel[1], pixel[2]);
+
+                if (wandAutoApply.checked) {
+                    executeMagicWand(px, py);
+                } else {
+                    showToast(`Color seleccionado: RGB(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`);
+                }
+            };
+        }
+
+        btnExecuteWand.addEventListener('click', () => {
+            executeMagicWand();
+        });
+
+        function executeMagicWand(startX, startY) {
             if (!cropper) return;
 
-            const croppedCanvas = cropper.getCroppedCanvas();
+            const naturalW = Math.round(cropper.getImageData().naturalWidth);
+            const naturalH = Math.round(cropper.getImageData().naturalHeight);
+
             const ctx = processingCanvas.getContext('2d');
-            processingCanvas.width = croppedCanvas.width;
-            processingCanvas.height = croppedCanvas.height;
+            processingCanvas.width = naturalW;
+            processingCanvas.height = naturalH;
 
-            ctx.drawImage(croppedCanvas, 0, 0);
+            const img = new Image();
+            img.src = historyStates[currentStateIndex];
+            img.onload = () => {
+                ctx.clearRect(0, 0, naturalW, naturalH);
+                ctx.drawImage(img, 0, 0);
 
-            const imageData = ctx.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
-            const data = imageData.data;
-            const tolerance = parseInt(toleranceSlider.value);
+                const imgData = ctx.getImageData(0, 0, naturalW, naturalH);
+                const data = imgData.data;
+                const tolerance = parseInt(toleranceSlider.value);
+                const targetR = selectedWandColor.r;
+                const targetG = selectedWandColor.g;
+                const targetB = selectedWandColor.b;
 
-            // Analiza el color de referencia (Esquina superior izquierda, pixel índice 0)
-            const bgR = data[0];
-            const bgG = data[1];
-            const bgB = data[2];
+                if (wandMode === 'contiguous') {
+                    const sx = (startX !== undefined && startX !== null) ? startX : (lastWandCoord ? lastWandCoord.x : 0);
+                    const sy = (startY !== undefined && startY !== null) ? startY : (lastWandCoord ? lastWandCoord.y : 0);
+                    runFloodFillRemoval(data, naturalW, naturalH, sx, sy, targetR, targetG, targetB, tolerance);
+                } else {
+                    runGlobalRemoval(data, targetR, targetG, targetB, tolerance);
+                }
 
+                ctx.putImageData(imgData, 0, 0);
+                const newUrl = processingCanvas.toDataURL('image/png');
+                cropper.replace(newUrl);
+                saveState(newUrl);
+                showToast("¡Fondo eliminado con la Varita Mágica!");
+            };
+        }
+
+        function runFloodFillRemoval(data, width, height, startX, startY, targetR, targetG, targetB, tolerance) {
+            const totalPixels = width * height;
+            const visited = new Uint8Array(totalPixels);
+            const queue = new Int32Array(totalPixels);
+            let qHead = 0;
+            let qTail = 0;
+
+            const startIdx = startX + startY * width;
+            queue[qTail++] = startIdx;
+            visited[startIdx] = 1;
+
+            while (qHead < qTail) {
+                const cur = queue[qHead++];
+                const cx = cur % width;
+                const cy = (cur / width) | 0;
+                const idx = cur * 4;
+
+                data[idx + 3] = 0; // Transparente
+
+                // 4 vecinos cardinales
+                if (cx > 0) {
+                    const n = cur - 1;
+                    if (!visited[n]) {
+                        visited[n] = 1;
+                        const p = n * 4;
+                        if (data[p + 3] > 0) {
+                            const dist = Math.sqrt(
+                                (data[p] - targetR) ** 2 +
+                                (data[p + 1] - targetG) ** 2 +
+                                (data[p + 2] - targetB) ** 2
+                            );
+                            if (dist <= tolerance) queue[qTail++] = n;
+                        }
+                    }
+                }
+                if (cx < width - 1) {
+                    const n = cur + 1;
+                    if (!visited[n]) {
+                        visited[n] = 1;
+                        const p = n * 4;
+                        if (data[p + 3] > 0) {
+                            const dist = Math.sqrt(
+                                (data[p] - targetR) ** 2 +
+                                (data[p + 1] - targetG) ** 2 +
+                                (data[p + 2] - targetB) ** 2
+                            );
+                            if (dist <= tolerance) queue[qTail++] = n;
+                        }
+                    }
+                }
+                if (cy > 0) {
+                    const n = cur - width;
+                    if (!visited[n]) {
+                        visited[n] = 1;
+                        const p = n * 4;
+                        if (data[p + 3] > 0) {
+                            const dist = Math.sqrt(
+                                (data[p] - targetR) ** 2 +
+                                (data[p + 1] - targetG) ** 2 +
+                                (data[p + 2] - targetB) ** 2
+                            );
+                            if (dist <= tolerance) queue[qTail++] = n;
+                        }
+                    }
+                }
+                if (cy < height - 1) {
+                    const n = cur + width;
+                    if (!visited[n]) {
+                        visited[n] = 1;
+                        const p = n * 4;
+                        if (data[p + 3] > 0) {
+                            const dist = Math.sqrt(
+                                (data[p] - targetR) ** 2 +
+                                (data[p + 1] - targetG) ** 2 +
+                                (data[p + 2] - targetB) ** 2
+                            );
+                            if (dist <= tolerance) queue[qTail++] = n;
+                        }
+                    }
+                }
+            }
+        }
+
+        function runGlobalRemoval(data, targetR, targetG, targetB, tolerance) {
             for (let i = 0; i < data.length; i += 4) {
+                if (data[i + 3] === 0) continue;
                 const r = data[i];
                 const g = data[i + 1];
                 const b = data[i + 2];
-                const a = data[i + 3];
-
-                if (a === 0) continue; // Ya es transparente
-
-                // Distancia Euclidiana entre colores
-                const distance = Math.sqrt(
-                    Math.pow(r - bgR, 2) +
-                    Math.pow(g - bgG, 2) +
-                    Math.pow(b - bgB, 2)
+                const dist = Math.sqrt(
+                    (r - targetR) ** 2 +
+                    (g - targetG) ** 2 +
+                    (b - targetB) ** 2
                 );
-
-                if (distance <= tolerance) {
-                    data[i + 3] = 0; // Hacerlo Transparente (Alpha = 0)
+                if (dist <= tolerance) {
+                    data[i + 3] = 0;
                 }
             }
+        }
 
-            ctx.putImageData(imageData, 0, 0);
-            const newImgUrl = processingCanvas.toDataURL('image/png');
+        // Sincronizar redimensionado de ventana
+        window.addEventListener('resize', () => {
+            if (activeTool === 'pen') {
+                syncPenCanvas();
+            }
+        });
 
-            // Reemplazar imagen y guardar en historial
-            cropper.replace(newImgUrl);
-            saveState(newImgUrl);
-
-            showToast("¡Fondo eliminado!");
+        // Atajos de teclado para Deshacer / Rehacer
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    btnRedo.click();
+                } else {
+                    btnUndo.click();
+                }
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                btnRedo.click();
+            }
         });
 
         // 5. Exportar Imagen
