@@ -473,6 +473,39 @@
             <canvas id="pen-canvas" class="hidden absolute z-30 pointer-events-auto"></canvas>
         </div>
 
+        <!-- Barra Flotante de Navegación y Zoom (Estilo Photoshop) -->
+        <div id="viewport-nav-bar"
+            class="hidden absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-900/90 backdrop-blur-md border border-gray-700/80 rounded-xl px-3 py-1.5 shadow-2xl z-40 flex items-center gap-3 text-xs text-gray-300 select-none transition-all">
+            
+            <!-- Controles de Zoom -->
+            <div class="flex items-center gap-1 border-r border-gray-700 pr-3">
+                <button id="btn-zoom-out" type="button" class="w-7 h-7 rounded hover:bg-gray-800 text-gray-400 hover:text-white transition flex items-center justify-center text-sm" title="Reducir Zoom (Alt + Scroll abajo)">
+                    <i class="fa-solid fa-minus"></i>
+                </button>
+                <span id="zoom-badge" class="font-mono font-bold text-white min-w-[48px] text-center px-1">100%</span>
+                <button id="btn-zoom-in" type="button" class="w-7 h-7 rounded hover:bg-gray-800 text-gray-400 hover:text-white transition flex items-center justify-center text-sm" title="Aumentar Zoom (Alt + Scroll arriba)">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+
+            <!-- Accesos Rápidos de Vista -->
+            <div class="flex items-center gap-1 border-r border-gray-700 pr-3">
+                <button id="btn-zoom-fit" type="button" class="px-2 py-1 rounded hover:bg-gray-800 text-gray-300 hover:text-white font-medium transition" title="Ajustar Lienzo a Pantalla (Ctrl + 0)">
+                    Ajustar
+                </button>
+                <button id="btn-zoom-100" type="button" class="px-2 py-1 rounded hover:bg-gray-800 text-gray-300 hover:text-white font-medium transition" title="Tamaño Real 100% (Ctrl + 1)">
+                    100%
+                </button>
+            </div>
+
+            <!-- Indicador de Atajos -->
+            <div class="hidden sm:flex items-center gap-2 text-gray-400 text-[11px]">
+                <span class="flex items-center gap-1"><kbd class="bg-gray-800 border border-gray-700 px-1.5 py-0.5 rounded text-gray-300 font-mono">Alt + Scroll</kbd> Zoom</span>
+                <span>•</span>
+                <span class="flex items-center gap-1"><kbd class="bg-gray-800 border border-gray-700 px-1.5 py-0.5 rounded text-gray-300 font-mono">Espacio + Arrastre</kbd> Mover</span>
+            </div>
+        </div>
+
         <!-- Canvas oculto para procesamientos y redimensionado -->
         <canvas id="processing-canvas" class="hidden"></canvas>
     </main>
@@ -643,6 +676,9 @@
                     setTool('crop');
                     if (typeof clearPenPath === 'function') clearPenPath();
 
+                    const navBar = document.getElementById('viewport-nav-bar');
+                    if (navBar) navBar.classList.remove('hidden');
+
                     // Guardar el estado inicial en el historial
                     saveState(dataUrl);
                 };
@@ -654,7 +690,7 @@
             if (cropper) { cropper.destroy(); }
 
             cropper = new Cropper(imageWorkspace, {
-                viewMode: 1, // Restringe la imagen para que encaje en el lienzo sin desbordar
+                viewMode: 0, // Permite mover libremente y hacer zoom fuera del contenedor como en Photoshop
                 dragMode: 'move', // Permite mover la imagen
                 aspectRatio: NaN,
                 autoCropArea: 1, // Selecciona toda la imagen por defecto
@@ -666,6 +702,8 @@
                 cropBoxMovable: true,
                 cropBoxResizable: true,
                 toggleDragModeOnDblclick: false,
+                zoomOnWheel: false, // Controlado manualmente con Alt + Scroll como en Photoshop
+                zoomOnTouch: true,
                 ready() {
                     // Actualizamos W y H cada vez que se carga/reemplaza la imagen (incluso al Deshacer)
                     const imgData = cropper.getImageData();
@@ -673,11 +711,25 @@
                     inputHeight.value = Math.round(imgData.naturalHeight);
 
                     setupWorkspaceListeners();
+                    updateZoomBadge();
                     if (activeTool === 'pen') {
                         syncPenCanvas();
                     } else if (activeTool === 'wand') {
                         cropper.clear();
                         cropper.setDragMode('none');
+                    }
+                },
+                zoom() {
+                    updateZoomBadge();
+                    if (activeTool === 'pen') {
+                        syncPenCanvas();
+                        redrawPenPathOnView();
+                    }
+                },
+                cropmove() {
+                    if (activeTool === 'pen') {
+                        syncPenCanvas();
+                        redrawPenPathOnView();
                     }
                 }
             });
@@ -906,11 +958,61 @@
             }
         }
 
+        function updateSegmentNaturalCoords(seg) {
+            if (!cropper || !seg) return;
+            const canvasData = cropper.getCanvasData();
+            const imgData = cropper.getImageData();
+            const nw = imgData.naturalWidth;
+            const nh = imgData.naturalHeight;
+
+            seg._natPoint = {
+                x: ((seg.point.x - canvasData.left) / canvasData.width) * nw,
+                y: ((seg.point.y - canvasData.top) / canvasData.height) * nh
+            };
+            seg._natHandleIn = {
+                x: (seg.handleIn.x / canvasData.width) * nw,
+                y: (seg.handleIn.y / canvasData.height) * nh
+            };
+            seg._natHandleOut = {
+                x: (seg.handleOut.x / canvasData.width) * nw,
+                y: (seg.handleOut.y / canvasData.height) * nh
+            };
+        }
+
+        function redrawPenPathOnView() {
+            if (!penPath || !cropper) return;
+            const canvasData = cropper.getCanvasData();
+            const imgData = cropper.getImageData();
+            const nw = imgData.naturalWidth;
+            const nh = imgData.naturalHeight;
+
+            penPath.segments.forEach(seg => {
+                if (!seg._natPoint) return;
+                const sx = canvasData.left + (seg._natPoint.x / nw) * canvasData.width;
+                const sy = canvasData.top + (seg._natPoint.y / nh) * canvasData.height;
+                seg.point = new paper.Point(sx, sy);
+
+                if (seg._natHandleIn) {
+                    seg.handleIn = new paper.Point(
+                        (seg._natHandleIn.x / nw) * canvasData.width,
+                        (seg._natHandleIn.y / nh) * canvasData.height
+                    );
+                }
+                if (seg._natHandleOut) {
+                    seg.handleOut = new paper.Point(
+                        (seg._natHandleOut.x / nw) * canvasData.width,
+                        (seg._natHandleOut.y / nh) * canvasData.height
+                    );
+                }
+            });
+            if (paper.view) paper.view.draw();
+        }
+
         function setupPenTool() {
             penToolInstance = new paper.Tool();
 
             penToolInstance.onMouseDown = function (event) {
-                if (activeTool !== 'pen') return;
+                if (activeTool !== 'pen' || isSpacebarDown || isPanning || event.event.button === 1) return;
 
                 // Si ya hay al menos 3 nodos y hace clic cerca del primer nodo, cerrar el trazado
                 if (penPath && penPath.segments.length >= 3 && !penPath.closed) {
@@ -938,25 +1040,30 @@
                 }
 
                 activeDragSegment = penPath.add(event.point);
+                updateSegmentNaturalCoords(activeDragSegment);
                 updatePenUI();
                 paper.view.draw();
             };
 
             penToolInstance.onMouseDrag = function (event) {
-                if (activeTool !== 'pen' || !activeDragSegment) return;
+                if (activeTool !== 'pen' || !activeDragSegment || isSpacebarDown || isPanning) return;
                 const delta = event.point.subtract(activeDragSegment.point);
                 activeDragSegment.handleOut = delta;
                 activeDragSegment.handleIn = delta.multiply(-1);
+                updateSegmentNaturalCoords(activeDragSegment);
                 paper.view.draw();
             };
 
             penToolInstance.onMouseUp = function () {
+                if (activeDragSegment) {
+                    updateSegmentNaturalCoords(activeDragSegment);
+                }
                 activeDragSegment = null;
                 paper.view.draw();
             };
 
             penToolInstance.onMouseMove = function (event) {
-                if (activeTool !== 'pen') return;
+                if (activeTool !== 'pen' || isSpacebarDown || isPanning) return;
                 if (penPath && penPath.segments.length >= 3 && !penPath.closed) {
                     const firstPoint = penPath.segments[0].point;
                     if (event.point.getDistance(firstPoint) < 14) {
@@ -1077,25 +1184,25 @@
 
             offCtx.beginPath();
             const segs = penPath.segments;
-            const startX = mapX(segs[0].point.x);
-            const startY = mapY(segs[0].point.y);
-            offCtx.moveTo(startX, startY);
+            const startPt = segs[0]._natPoint || { x: mapX(segs[0].point.x), y: mapY(segs[0].point.y) };
+            offCtx.moveTo(startPt.x, startPt.y);
 
             for (let i = 0; i < segs.length; i++) {
                 const s1 = segs[i];
                 const s2 = (i === segs.length - 1) ? segs[0] : segs[i + 1];
 
-                const p1x = mapX(s1.point.x);
-                const p1y = mapY(s1.point.y);
-                const p2x = mapX(s2.point.x);
-                const p2y = mapY(s2.point.y);
+                const p1 = s1._natPoint || { x: mapX(s1.point.x), y: mapY(s1.point.y) };
+                const p2 = s2._natPoint || { x: mapX(s2.point.x), y: mapY(s2.point.y) };
 
-                const cp1x = p1x + mapDeltaX(s1.handleOut.x);
-                const cp1y = p1y + mapDeltaY(s1.handleOut.y);
-                const cp2x = p2x + mapDeltaX(s2.handleIn.x);
-                const cp2y = p2y + mapDeltaY(s2.handleIn.y);
+                const h1 = s1._natHandleOut || { x: mapDeltaX(s1.handleOut.x), y: mapDeltaY(s1.handleOut.y) };
+                const h2 = s2._natHandleIn || { x: mapDeltaX(s2.handleIn.x), y: mapDeltaY(s2.handleIn.y) };
 
-                offCtx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2x, p2y);
+                const cp1x = p1.x + h1.x;
+                const cp1y = p1.y + h1.y;
+                const cp2x = p2.x + h2.x;
+                const cp2y = p2.y + h2.y;
+
+                offCtx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
             }
             offCtx.closePath();
 
@@ -1198,7 +1305,7 @@
         }
 
         function handleWorkspaceClick(e) {
-            if (activeTool !== 'wand' || !cropper) return;
+            if (activeTool !== 'wand' || !cropper || isSpacebarDown || isPanning || e.button !== 0) return;
 
             const cropperContainer = workspaceContainer.querySelector('.cropper-container');
             if (!cropperContainer) return;
@@ -1389,15 +1496,128 @@
             }
         }
 
-        // Sincronizar redimensionado de ventana
-        window.addEventListener('resize', () => {
+        // ==========================================
+        // NAVEGACIÓN Y ZOOM ESTILO PHOTOSHOP
+        // ==========================================
+        const viewportNavBar = document.getElementById('viewport-nav-bar');
+        const zoomBadge = document.getElementById('zoom-badge');
+        const btnZoomIn = document.getElementById('btn-zoom-in');
+        const btnZoomOut = document.getElementById('btn-zoom-out');
+        const btnZoomFit = document.getElementById('btn-zoom-fit');
+        const btnZoom100 = document.getElementById('btn-zoom-100');
+
+        let isSpacebarDown = false;
+        let isPanning = false;
+        let lastPanX = 0;
+        let lastPanY = 0;
+
+        function updateZoomBadge() {
+            if (!cropper) return;
+            const canvasData = cropper.getCanvasData();
+            if (!canvasData || !canvasData.naturalWidth) return;
+            const ratio = canvasData.width / canvasData.naturalWidth;
+            const percent = Math.round(ratio * 100);
+            if (zoomBadge) zoomBadge.innerText = `${percent}%`;
+        }
+
+        function zoomViewport(ratioDelta, eventPivot) {
+            if (!cropper) return;
+            const canvasData = cropper.getCanvasData();
+            const currentRatio = canvasData.width / canvasData.naturalWidth;
+
+            // Límites de zoom: 5% a 3000%
+            if (ratioDelta < 0 && currentRatio <= 0.05) return;
+            if (ratioDelta > 0 && currentRatio >= 30.0) return;
+
+            if (eventPivot) {
+                cropper.zoom(ratioDelta, eventPivot);
+            } else {
+                cropper.zoom(ratioDelta);
+            }
+            updateZoomBadge();
+
             if (activeTool === 'pen') {
                 syncPenCanvas();
+                redrawPenPathOnView();
             }
-        });
+        }
 
-        // Atajos de teclado para Deshacer / Rehacer
-        document.addEventListener('keydown', (e) => {
+        function resetViewFit() {
+            if (!cropper) return;
+            cropper.reset();
+            updateZoomBadge();
+            if (activeTool === 'pen') {
+                syncPenCanvas();
+                redrawPenPathOnView();
+            }
+            showToast("Vista ajustada a la pantalla");
+        }
+
+        function resetView100() {
+            if (!cropper) return;
+            cropper.zoomTo(1);
+            updateZoomBadge();
+            if (activeTool === 'pen') {
+                syncPenCanvas();
+                redrawPenPathOnView();
+            }
+            showToast("Vista al 100% (píxeles reales)");
+        }
+
+        if (btnZoomIn) btnZoomIn.addEventListener('click', () => zoomViewport(0.15));
+        if (btnZoomOut) btnZoomOut.addEventListener('click', () => zoomViewport(-0.15));
+        if (btnZoomFit) btnZoomFit.addEventListener('click', resetViewFit);
+        if (btnZoom100) btnZoom100.addEventListener('click', resetView100);
+
+        function restoreToolCursor() {
+            const container = workspaceContainer.querySelector('.cropper-container');
+            if (container) {
+                container.style.cursor = '';
+                container.classList.remove('cursor-wand', 'cursor-pen');
+                if (activeTool === 'wand') container.classList.add('cursor-wand');
+                if (activeTool === 'pen') container.classList.add('cursor-pen');
+            }
+            if (penCanvas) {
+                penCanvas.style.cursor = activeTool === 'pen' ? 'crosshair' : 'default';
+            }
+        }
+
+        // Zoom con Alt + Scroll (y Ctrl + Scroll) centrado en el cursor del ratón
+        workspaceContainer.addEventListener('wheel', (e) => {
+            if (!cropper) return;
+            if (e.altKey || e.ctrlKey) {
+                e.preventDefault();
+                const zoomFactor = 0.15;
+                const delta = e.deltaY < 0 ? zoomFactor : -zoomFactor;
+                zoomViewport(delta, e);
+            }
+        }, { passive: false });
+
+        // Detección de tecla Espacio (Herramienta Mano / Paneo) y atajos de zoom
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName.toUpperCase())) return;
+
+            if (e.code === 'Space' && !isSpacebarDown) {
+                e.preventDefault();
+                isSpacebarDown = true;
+                const container = workspaceContainer.querySelector('.cropper-container');
+                if (container) container.style.cursor = 'grab';
+                if (penCanvas) penCanvas.style.cursor = 'grab';
+            }
+
+            // Ctrl + 0: Ajustar a pantalla
+            if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+                e.preventDefault();
+                resetViewFit();
+            }
+
+            // Ctrl + 1: 100% de tamaño
+            if ((e.ctrlKey || e.metaKey) && e.key === '1') {
+                e.preventDefault();
+                resetView100();
+            }
+
+            // Atajos de teclado para Deshacer / Rehacer
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
                 e.preventDefault();
                 if (e.shiftKey) {
@@ -1408,6 +1628,67 @@
             } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
                 e.preventDefault();
                 btnRedo.click();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') {
+                isSpacebarDown = false;
+                if (!isPanning) {
+                    restoreToolCursor();
+                }
+            }
+        });
+
+        // Iniciar Paneo con Espacio + Clic o Clic de la Rueda (botón 1)
+        workspaceContainer.addEventListener('mousedown', (e) => {
+            if (!cropper) return;
+            if (isSpacebarDown || e.button === 1) {
+                e.preventDefault();
+                isPanning = true;
+                lastPanX = e.clientX;
+                lastPanY = e.clientY;
+                const container = workspaceContainer.querySelector('.cropper-container');
+                if (container) container.style.cursor = 'grabbing';
+                if (penCanvas) penCanvas.style.cursor = 'grabbing';
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isPanning && cropper) {
+                e.preventDefault();
+                const dx = e.clientX - lastPanX;
+                const dy = e.clientY - lastPanY;
+                lastPanX = e.clientX;
+                lastPanY = e.clientY;
+
+                cropper.move(dx, dy);
+
+                if (activeTool === 'pen') {
+                    syncPenCanvas();
+                    redrawPenPathOnView();
+                }
+            }
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (isPanning) {
+                isPanning = false;
+                if (isSpacebarDown) {
+                    const container = workspaceContainer.querySelector('.cropper-container');
+                    if (container) container.style.cursor = 'grab';
+                    if (penCanvas) penCanvas.style.cursor = 'grab';
+                } else {
+                    restoreToolCursor();
+                }
+            }
+        });
+
+        // Sincronizar redimensionado de ventana
+        window.addEventListener('resize', () => {
+            if (activeTool === 'pen') {
+                syncPenCanvas();
+                redrawPenPathOnView();
             }
         });
 
